@@ -4,6 +4,9 @@ import pandas as pd
 
 class PriorSet(object):
     def __init__(self, priors):
+        """
+        An object to work with a list of priors.
+        """
         self.priors = priors
         self.ndim  = len(priors)
 
@@ -16,6 +19,9 @@ class PriorSet(object):
 
 
     def generate_pv_population(self, npop):
+        """
+        Generate a population for pyde maximizer
+        """
         return np.array([[((p.random()[0]-p.center)*p.squeeze)+p.center for p in self.priors] for i in range(npop)])
 
     def c_log_prior(self, pv):
@@ -83,6 +89,16 @@ class PriorSet(object):
 
 class Prior(object):
     def __init__(self, a, b, name='', description='', unit='', squeeze=1.,priortype=""):
+        """
+        A prior object
+
+        INPUT:
+            a - starting value
+            b - ending value
+
+        NOTES:
+            Usually using other objects that extend this object
+        """
         self.a = float(a)
         self.b = float(b)
         self.center= 0.5*(a+b)
@@ -94,13 +110,21 @@ class Prior(object):
         self.unit = unit
         self.priortype = priortype
 
-    def limits(self): return self.a, self.b 
-    def min(self): return self.a
-    def max(self): return self.b
+    def limits(self): 
+        return self.a, self.b 
+
+    def min(self):
+        return self.a
+
+    def max(self):
+        return self.b
    
  
 class UniformPrior(Prior):
     def __init__(self, a, b, name='', description='', unit='', squeeze=1.,priortype="model"):
+        """
+        Uniform prior starting from a and ending at b
+        """
         self.args1 = a
         self.args2 = b
         self.ID = 'UP'
@@ -127,6 +151,9 @@ class UniformPrior(Prior):
 
 class JeffreysPrior(Prior):
     def __init__(self, a, b, name='', description='', unit='', squeeze=1.,priortype="model"):
+        """
+        JeffreysPrior starting from a and ending at b
+        """
         self.args1 = a
         self.args2 = b
         self.ID = 'JP'
@@ -152,6 +179,9 @@ class JeffreysPrior(Prior):
 
 class NormalPrior(Prior):
     def __init__(self, mean, std, name='', description='', unit='', lims=None, limsigma=5, squeeze=1,priortype="model"):
+        """
+        Gaussian prior with a mean and std
+        """
         self.args1 = mean
         self.args2 = std
         self.ID = 'NP'
@@ -181,6 +211,9 @@ class NormalPrior(Prior):
     
 class FixedPrior(Prior):
     def __init__(self, value, name='', description='', unit='', lims=None, squeeze=1,priortype="model"):
+        """
+        Fixed prior at a given value
+        """
         self.args1 = value
         self.args2 = value
         self.ID = 'FP'
@@ -197,15 +230,6 @@ class FixedPrior(Prior):
 
     def log(self, x, pv=None):
         return np.zeros_like(x) if isinstance(x, np.ndarray) else 0.
-
-    #def log(self, x, pv=None):
-    #    if isinstance(x, np.ndarray):
-    #        return np.where((self.a < x) & (x < self.b),  self._lf1 - (x-self.mean)**2 * self._f2, -1e18)
-    #    else:
-    #        return self._lf1 -(x-self.mean)**2*self._f2 if self.a < x < self.b else -1e18
-
-    #def random(self, size=1):
-    #    return np.random.uniform(self.a, self.b, size=size) #normal(self.mean, self.std, size)
 
 class DummyPrior(Prior):
     def __init__(self, a, b, name='', description='', unit='',priortype="model"):

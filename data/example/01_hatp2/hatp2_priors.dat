@@ -5,8 +5,8 @@ vsini                 Uniform           0.0,30.
 inc_p1                Uniform           85.0,90.0
 p_p1                  Normal            0.07227,0.0007
 a_p1                  Normal            9.0,3.0
-rstar                 Normal            1.48,0.05
-u1                    Normal            0.5,0.05
+u1                    Normal            0.3,0.05
+u2                    Normal            0.3,0.05
 gamma                 Uniform           -400.,400.
 ecc_p1                Normal            0.501,0.007
 omega_p1              Normal            -172.6,1.6

@@ -18,49 +18,43 @@ class LPFunction(object):
     Log-Likelihood function class
        
     NOTES:
-    Based on hpprvi's awesome class, see: https://github.com/hpparvi/exo_tutorials
+        Based on hpprvi's class, see: https://github.com/hpparvi/exo_tutorials
     """
     def __init__(self,x,y,yerr,file_priors):
         """
-        Note: number_pv_baseline must be set to whatever the index of the 'fraw' parameter is
+        INPUT:
+            x - time values in BJD
+            y - y values in m/s
+            yerr - yerr values in m/s
+            file_priors - prior file name
         """
-        self.data= {"time"   : x,  
-                    "flux"   : y,   
+        self.data= {"x"   : x,  
+                    "y"   : y,   
                     "error"  : yerr}
         # Setting priors
-        self.ps_all = priorset_from_file(file_priors)
-        self.ps_fixed = PriorSet(np.array(self.ps_all.priors)[np.array(self.ps_all.fixed)])
-        self.ps_vary  = PriorSet(np.array(self.ps_all.priors)[~np.array(self.ps_all.fixed)])
+        self.ps_all = priorset_from_file(file_priors) # all priors
+        self.ps_fixed = PriorSet(np.array(self.ps_all.priors)[np.array(self.ps_all.fixed)]) # fixed priorset
+        self.ps_vary  = PriorSet(np.array(self.ps_all.priors)[~np.array(self.ps_all.fixed)]) # varying priorset
         self.ps_fixed_dict = {key: val for key, val in zip(self.ps_fixed.labels,self.ps_fixed.args1)}
+        print('Reading in priorfile from {}'.format(file_priors))
+        print('UPDATE3')
         print(self.ps_all.df)
         
-    def detrend(self,pv):
-        """
-        A function to detrend.
-        
-        INPUT:
-        pv    - an array containing a sample draw of the parameters defined in self.lpf.ps
-        
-        OUTPUT:
-        detrend/pv[self.number_pv_baseline] - the additional trend in the data (no including transit)
-        """
-        detrend = np.zeros(len(self.data["flux"]))
-        # loop over detrend parameters
-        for i in self.ps_vary.get_param_type_indices(paramtype="detrend"):
-            #print(i)
-            detrend += pv[i]*(self.data[self.ps_vary.labels[i]]-1.)
-        return detrend
-    
     def pv2num(self,lab):
         return np.where(np.array(self.ps_vary.labels)==lab)[0][0]
     
     def get_value(self,pv,lab):
+        """
+        Get the current value in the argument list 'pv' that has label 'lab'
+        """
+        # First check if we are actually varying it
         if lab in self.ps_vary.labels:
             return pv[self.pv2num(lab)]
         else:
+            # We are not varying it
             return self.ps_fixed_dict[lab]
         
-    def compute_transit(self,pv,times=None):
+    def compute_rm_model(self,pv,times=None):
         """
         Calls RM model and returns the transit model
         
@@ -78,66 +72,85 @@ class LPFunction(object):
         ii     =self.get_value(pv,'inc_p1')
         rprs   =self.get_value(pv,'p_p1')
         aRs    =self.get_value(pv,'a_p1')
-        rstar  =self.get_value(pv,'rstar')
-        eps    =self.get_value(pv,'u1')
+        u1     =self.get_value(pv,'u1')
+        u2     =self.get_value(pv,'u2')
         gamma  =self.get_value(pv,'gamma')
         beta   =self.get_value(pv,'vbeta')
         #sigma  =self.get_value(pv,'sigma')
-        sigma  = vsini /1.33
+        sigma  = vsini /1.31 # assume sigma is vsini/1.31 (see Hirano et al. 2010, 2011)
         e      =self.get_value(pv,'ecc_p1')
         omega  =self.get_value(pv,'omega_p1')
-        exptime=self.get_value(pv,'exptime')/86400.
+        exptime=self.get_value(pv,'exptime')/86400. # exptime in days
         if times is None:
-            times = self.data["time"]
-        self.RH = RMHirano(lam,vsini,P,T0,aRs,ii,rprs,e,omega,[eps],rstar,beta,
-                            sigma,supersample_factor=7,exp_time=exptime,limb_dark='linear')
+            times = self.data["x"]
+        self.RH = RMHirano(lam,vsini,P,T0,aRs,ii,rprs,e,omega,[u1,u2],beta,
+                            sigma,supersample_factor=7,exp_time=exptime,limb_dark='quadratic')
         self.rm = self.RH.evaluate(times)
-        self.rv = self.compute_rv_model(pv,times=times)
-        return self.rm + self.rv
+        return self.rm
         
     def compute_rv_model(self,pv,times=None):
         """
-        Compute the light curve model with detrend
-        """
-        if times is None: times = self.data["time"]
-        T0    = self.get_value(pv,'t0_p1')
-        P     = self.get_value(pv,'P_p1')
-        gamma = self.get_value(pv,'gamma')
-        K     = self.get_value(pv,'K_p1')
-        e     = self.get_value(pv,'ecc_p1')
-        w     = self.get_value(pv,'omega_p1')
-        rv    = get_rv_curve(times,P=P,tc=T0,e=e,omega=w,K=K)
-        return rv+gamma
+        Compute the RV model
+
+        INPUT:
+            pv    - a list of parameters (only parameters that are being varied)
+            times - times (optional), array of timestamps 
         
-    def compute_lc_model(self,pv,times=None):
+        OUTPUT:
+            rv - the rv model evaluated at 'times' if supplied, otherwise 
+                      defaults to original data timestamps
         """
-        Compute the light curve model with detrend
+        if times is None:
+            times = self.data["x"]
+        T0      = self.get_value(pv,'t0_p1')
+        P       = self.get_value(pv,'P_p1')
+        gamma   = self.get_value(pv,'gamma')
+        K       = self.get_value(pv,'K_p1')
+        e       = self.get_value(pv,'ecc_p1')
+        w       = self.get_value(pv,'omega_p1')
+        self.rv = get_rv_curve(times,P=P,tc=T0,e=e,omega=w,K=K)+gamma
+        return self.rv
+        
+    def compute_total_model(self,pv,times=None):
         """
-        return self.compute_transit(pv,times=times) + self.detrend(pv)
+        Computes the full RM model (including RM and RV)
+
+        INPUT:
+            pv    - a list of parameters (only parameters that are being varied)
+            times - times (optional), array of timestamps 
+        
+        OUTPUT:
+            rm - the rm model evaluated at 'times' if supplied, otherwise 
+                      defaults to original data timestamps
+
+        NOTES:
+            see compute_rm_model(), compute_rv_model()
+        """
+        return self.compute_rm_model(pv,times=times) + self.compute_rv_model(pv,times=times)
                     
     def __call__(self,pv):
         """
         Return the log likelihood
+
+        INPUT:
+            pv - the input list of varying parameters
         """
         if any(pv < self.ps_vary.pmins) or any(pv>self.ps_vary.pmaxs):
             return -np.inf
-        # make sure that sqrtecosw is well behaved
-        flux_m = self.compute_lc_model(pv)
+        flux_m = self.compute_total_model(pv)
         # Return the log-likelihood
         log_of_priors = self.ps_vary.c_log_prior(pv)
-        scaled_flux   = self.data["flux"]
-        #log_of_model  = ll_normal_es(scaled_flux, flux_m, pv[self.number_pv_error])
+        scaled_flux   = self.data["y"]
         log_of_model  = ll_normal_ev_py(scaled_flux, flux_m, self.data['error'])
         log_ln = log_of_priors + log_of_model
         return log_ln
 
 class RMFit(object):
     """
-    A class that does transit fitting.
+    A class that does RM fitting.
     
     NOTES:
-    - Needs to have LPFunction defined
-    TODO:
+        - Needs to have LPFunction defined
     """
     def __init__(self,LPFunction):
         self.lpf = LPFunction
@@ -156,7 +169,7 @@ class RMFit(object):
         Minimize using the PyDE
         
         NOTES:
-        https://github.com/hpparvi/PyDE
+            see https://github.com/hpparvi/PyDE
         """
         centers = np.array(self.lpf.ps_vary.centers)
         print("Running PyDE Optimizer")
@@ -203,38 +216,30 @@ class RMFit(object):
     
     def plot_lc(self,pv,times=None):
         """
-        Plot the light curve for a given set of parameters pv
+        Plot the model curve for a given set of parameters pv
         
         INPUT:
-        pv - an array containing a sample draw of the parameters defined in self.lpf.ps
-        
-        EXAMPLE:
-        
+            pv - an array containing a sample draw of the parameters defined in self.lpf.ps
         """
-        self.scaled_flux   = self.lpf.data["flux"]#/pv[self.lpf.number_pv_baseline]
-        #self.scaled_flux_no_trend = self.scaled_flux - self.lpf.detrend(pv)
-        self.model_trend   = self.lpf.compute_lc_model(pv)
-        #self.model_no_trend= self.lpf.compute_transit(pv)
+        self.scaled_flux   = self.lpf.data["y"]#/pv[self.lpf.number_pv_baseline]
+        self.model_trend   = self.lpf.compute_total_model(pv)
         self.residual      = self.scaled_flux - self.model_trend
         try:
             self.scaled_error  = self.lpf.data["error"]#/pv[self.lpf.number_pv_baseline]
         except Exception as e:
             self.scaled_error = pv[self.lpf.number_pv_error]#/pv[self.lpf.number_pv_baseline]
         
+        # Plot
         nrows = 2
-
         self.fig, self.ax = plt.subplots(nrows=nrows,sharex=True,figsize=(10,6),
                                          gridspec_kw={'height_ratios': [5, 2]})
-        self.ax[0].errorbar(self.lpf.data["time"],self.scaled_flux,yerr=self.scaled_error,
+        self.ax[0].errorbar(self.lpf.data["x"],self.scaled_flux,yerr=self.scaled_error,
                 elinewidth=1,lw=0,alpha=1,capsize=5,mew=1,marker="o",barsabove=True,markersize=8,
                             label="Data with trend")
-        self.ax[0].plot(self.lpf.data["time"],self.model_trend,label="Model with trend",color='crimson')
-        #self.ax[1].errorbar(self.lpf.data["time"],self.scaled_flux_no_trend,yerr=self.scaled_error,elinewidth=0.3,lw=0,alpha=0.5,marker="o",markersize=4,label="Data, no trend")
-        #self.ax[1].plot(self.lpf.data["time"],self.model_no_trend,label="Model no trend")
-        self.ax[1].errorbar(self.lpf.data["time"],self.residual,yerr=self.scaled_error,
+        self.ax[0].plot(self.lpf.data["x"],self.model_trend,label="Model with trend",color='crimson')
+        self.ax[1].errorbar(self.lpf.data["x"],self.residual,yerr=self.scaled_error,
                 elinewidth=1,lw=0,alpha=1,capsize=5,mew=1,marker="o",barsabove=True,markersize=8,
                             label="residual, std="+str(np.std(self.residual)))
-        #self.ax[2].plot(self.lpf.data["time"],self.residual,label="residual, std="+str(np.std(self.residual)),lw=0,marker="o",ms=3)
         [self.ax[i].minorticks_on() for i in range(nrows)]
         [self.ax[i].legend(loc="lower left",fontsize=8) for i in range(nrows)]
         self.ax[-1].set_xlabel("Time (BJD)",labelpad=2)
@@ -251,7 +256,6 @@ class RMFit(object):
     def plot_lc_mcmc_fit(self,times=None): 
         df = self.get_mean_values_mcmc_posteriors()
         self.plot_lc(df.medvals.values)   
-
 
 def read_priors(priorname):
     """
@@ -313,6 +317,8 @@ def read_priors(priorname):
 
 def priordict_to_priorset(priordict,verbose=True):
     """
+    Get a PriorSet from prior diectionary
+
     EXAMPLE:
         P, numpriors = readpriors('../data/priors.dat')
         ps = priordict_to_priorset(priors)
@@ -336,28 +342,29 @@ def priordict_to_priorset(priordict,verbose=True):
 
 def priorset_from_file(filename,verbose=False):
     """
-    
+    Get a PriorSet() from a filename
     """
     priordict, num_priors = read_priors(filename)
     return priordict_to_priorset(priordict,verbose)
 
 class RMHirano(object):
-    def __init__(self,lam,vsini,P,T0,aRs,i,RpRs,e,w,u,rstar,beta,sigma,supersample_factor=7,exp_time=0.00035,limb_dark='linear'):
+    def __init__(self,lam,vsini,P,T0,aRs,i,RpRs,e,w,u,beta,sigma,supersample_factor=7,exp_time=0.00035,limb_dark='linear'):
         """
+        Evaluate Rossiter McLaughlin effect using the model of Hirano et al. 2010, 2011
+
         INPUT:
-            lam - deg
-            vsini - km/s
-            P - d
-            T0 - BJD
-            aRs - 
-            i - deg
-            RpRs
-            e
-            w
-            u
-            rstar
-            beta
-            sigma
+            lam - sky-projected obliquity in deg
+            vsini - sky-projected rotational velocity in km/s
+            P - Period in days
+            T0 - Transit center 
+            aRs - a/R*
+            i - inclination in degrees
+            RpRs - radius ratio
+            e - eccentricity
+            w - omega in degrees
+            u - [u1,u2] where u1 and u2 are the quadratic limb-dark coefficients
+            beta - beta 
+            sigma - sigma
 
         EXAMPLE:
             times = np.linspace(-0.05,0.05,200)
@@ -370,9 +377,8 @@ class RMHirano(object):
             e = 0.
             w = 90.
             lam = 45.
-            u = [0.3]
-            rstar = 0.3
-            R = RMHirano(lam,vsini,P,T0,aRs,i,rprs,e,w,u,rstar)
+            u = [0.3,0.3]
+            R = RMHirano(lam,vsini,P,T0,aRs,i,rprs,e,w,u,limb_dark='quadratic')
             rm = R.evaluate(times)
 
             fig, ax = plt.subplots()
@@ -384,24 +390,30 @@ class RMHirano(object):
         self.T0 = T0
         self.aRs = aRs
         self.i = i
-        self.iS = 90. # this isn't really needed
+        self.iS = 90. # not really using anymore, as it cancels out, should just remove
         self.RpRs = RpRs
         self.e = e
         self.w = w
         self.u = u
         self.limb_dark = limb_dark
-        self.rstar = rstar
+        self.rstar = 1. # not really using anymore, as it cancels out, should just remove
         self.beta = beta
         self.sigma = sigma
         self.exp_time = exp_time
         self.supersample_factor = int(supersample_factor)
-        self.Omega = (self.vsini/np.sin(np.deg2rad(self.iS)))/(self.rstar*aconst.R_sun.value/1000.)
+        self._Omega = (self.vsini/np.sin(np.deg2rad(self.iS)))/(self.rstar*aconst.R_sun.value/1000.)
         
     def true_anomaly(self,times):
+        """
+        Calculate the true anomaly
+        """
         f = true_anomaly(times,self.T0,self.P,self.aRs,self.i,self.e,self.w)
         return f
     
     def calc_transit(self,times):
+        """
+        Calculate transit model of planet
+        """
         params = batman.TransitParams()
         params.t0 = self.T0
         params.per = self.P
@@ -418,6 +430,9 @@ class RMHirano(object):
         return transitmodel.light_curve(params)
     
     def planet_XYZ_position(self,times):
+        """
+        Get the planet XYZ position at times
+        """
         X, Y, Z = planet_XYZ_position(times,self.T0,self.P,self.aRs,self.i,self.e,self.w)
         return X, Y, Z
     
@@ -425,42 +440,20 @@ class RMHirano(object):
         lam, w, i = np.deg2rad(self.lam), np.deg2rad(self.w), np.deg2rad(self.i)
         f = self.true_anomaly(times)
         r = self.aRs*(1.-self.e**2.)/(1.+self.e*np.cos(f)) # distance
-        # Working for lam = 0, 180., i = 90.
-        # x = -r*np.cos(f+w)*np.cos(lam)
-        # Working for lam = 0, 180., i = 90., why positive sign on the other one? - due to rotation matrix
         x = -r*np.cos(f+w)*np.cos(lam) + r*np.sin(lam)*np.sin(f+w)*np.cos(i)
         return x
 
-    def EqF6(self,x):
-        """
-        Relation between rotation and Gaussian broadening kernels by least-squares fitting
-        """
-        u1 = self.u[0]
-        u2 = self.u[1]
-        alpha = 1./np.sqrt(2.)-(12.*(u1+2.*u2)*np.exp(-x**2))/(x**2*(-6.+2.*u1+u2)) \
-           + (6.*np.exp(-x**2/2.))/(x**3*(-6.+2.*u1+u2)) * ( -2.*x**3*(-1.+u1+u2)*i0(x**2/2.) \
-           + 2.*x*(-2.*u2+x**2*(-1.+u1+u2)) * i1(x**2/2.)
-           + np.sqrt(np.pi)*np.exp(x**2/2.)*(u1+2.*u2)*erf(x) )
-        return alpha
-
-    def calculate_alpha(self):
-        alpha = fsolve(self.EqF6, x0=1.0, xtol=1e-8)[0]
-        return alpha
-    
     def evaluate(self,times,base_error=0.):
         sigma = self.sigma
         beta = self.beta
         X = self.Xp(times)
         F = 1.-self.calc_transit(times)
-        vp = X*self.Omega*np.sin(self.iS)*self.rstar*aconst.R_sun.value/1000.
+        vp = X*self._Omega*np.sin(self.iS)*self.rstar*aconst.R_sun.value/1000.
         v = -1000.*vp*F*((2.*beta**2.+2.*sigma**2)/(2.*beta**2+sigma**2))**(3./2.) * (1.-(vp**2.)/(2.*beta**2+sigma**2) + (vp**4.)/(2.*(2.*beta**2+sigma**2)**2.))
-        #v = -1000.*vp*F*((2.*beta**2.+2.*sigma**2)/(2.*beta**2+sigma**2))**(3./2.) * (1.-(vp**2.)/(2.*beta**2+sigma**2))# + (vp**4.)/(2.*(2.*beta**2+sigma**2)**2.))
         # For diagnostics
-        #self.alpha = self.calculate_alpha()
         self.vp = vp
         self.X = X
         self.F = F
-        #self.f = self.true_anomaly(times)
         if base_error >0:
             return v + np.random.normal(loc=0.,scale=base_error,size=len(v))
         else:
@@ -497,6 +490,7 @@ def true_anomaly(time,T0,P,aRs,inc,ecc,omega):
 
 def planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega):
     """
+    Get planet XYZ position
 
     INPUT:
         time - in days
@@ -508,9 +502,9 @@ def planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega):
         omega - omega in deg
 
     OUTPUT:
-        X
-        Y
-        Z
+        X - planet X position
+        Y - planet Y position
+        Z - planet Z position
     
     EXAMPLE:
         Rstar = 1.
@@ -539,6 +533,17 @@ def planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega):
 def get_rv_curve(times_jd,P,tc,e,omega,K):
     """
     A function to calculate an RV curve as a function of time
+
+    INPUT:
+        times_jd - times in bjd
+        P - period in days
+        tc - transit center
+        e - eccentricity
+        omega - omega in degrees
+        K - semi-amplitude in m/s
+
+    OUTPUT:
+        RV curve in m/s
     """
     t_peri = radvel.orbit.timetrans_to_timeperi(tc=tc,per=P,ecc=e,omega=np.deg2rad(omega))
     rvs = radvel.kepler.rv_drive(times_jd,[P,t_peri,e,np.deg2rad(omega),K])

@@ -13,16 +13,3 @@ def ll_normal_ev_py(o,m,e):
     npt = o.size
     return -log(e).sum() -0.5*npt*LOG_TWO_PI - 0.5*square((o-m)/e).sum()
 
-#def ll_normal_ev(o,m,e,nthreads=0):
-#    return lhf.ll_normal_ev(o,m,e,nthreads)
-
-#def ll_normal(o,m,e,nthreads=0):
-#    npt = o.size
-#    if isinstance(e, ndarray):
-#        return lhf.ll_normal_ev(o,m,e,nthreads)
-#    else:
-#        return lhf.ll_normal_es(o,m,e,nthreads)
-
-
-#def ll_normal_es(o,m,e,nthreads=0):
-#    return lhf.ll_normal_es(o,m,e,nthreads)
