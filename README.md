@@ -14,4 +14,7 @@ python setup.py install
 # Dependencies
 
 - pyde, will need to download and install from here: https://github.com/hpparvi/PyDE
+- batman (pip install batman-package)
+- emcee (pip install emcee)
+- radvel (pip install radvel)
 
