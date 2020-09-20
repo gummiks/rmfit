@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from corner import corner
 import pyde
 import pyde.de
 import matplotlib.pyplot as plt
@@ -12,6 +11,7 @@ from .priors import PriorSet, UP, NP, JP, FP
 from .likelihood import ll_normal_ev_py
 from . import stats_help
 from . import utils
+from . import mcmc_help
 
 class LPFunction(object):
     """
@@ -37,19 +37,22 @@ class LPFunction(object):
         self.ps_vary  = PriorSet(np.array(self.ps_all.priors)[~np.array(self.ps_all.fixed)]) # varying priorset
         self.ps_fixed_dict = {key: val for key, val in zip(self.ps_fixed.labels,self.ps_fixed.args1)}
         print('Reading in priorfile from {}'.format(file_priors))
-        print('UPDATE3')
+        print('UPDATE5')
         print(self.ps_all.df)
         
-    def pv2num(self,lab):
+    def get_jump_parameter_index(self,lab):
+        """
+        Get the index of a given label
+        """
         return np.where(np.array(self.ps_vary.labels)==lab)[0][0]
     
-    def get_value(self,pv,lab):
+    def get_jump_parameter_value(self,pv,lab):
         """
         Get the current value in the argument list 'pv' that has label 'lab'
         """
         # First check if we are actually varying it
         if lab in self.ps_vary.labels:
-            return pv[self.pv2num(lab)]
+            return pv[self.get_jump_parameter_index(lab)]
         else:
             # We are not varying it
             return self.ps_fixed_dict[lab]
@@ -65,22 +68,22 @@ class LPFunction(object):
         OUTPUT:
             lc - the lightcurve model at *times*
         """
-        T0     =self.get_value(pv,'t0_p1')
-        P      =self.get_value(pv,'P_p1')
-        lam    =self.get_value(pv,'lam_p1')
-        vsini  =self.get_value(pv,'vsini') 
-        ii     =self.get_value(pv,'inc_p1')
-        rprs   =self.get_value(pv,'p_p1')
-        aRs    =self.get_value(pv,'a_p1')
-        u1     =self.get_value(pv,'u1')
-        u2     =self.get_value(pv,'u2')
-        gamma  =self.get_value(pv,'gamma')
-        beta   =self.get_value(pv,'vbeta')
-        #sigma  =self.get_value(pv,'sigma')
+        T0     =self.get_jump_parameter_value(pv,'t0_p1')
+        P      =self.get_jump_parameter_value(pv,'P_p1')
+        lam    =self.get_jump_parameter_value(pv,'lam_p1')
+        vsini  =self.get_jump_parameter_value(pv,'vsini') 
+        ii     =self.get_jump_parameter_value(pv,'inc_p1')
+        rprs   =self.get_jump_parameter_value(pv,'p_p1')
+        aRs    =self.get_jump_parameter_value(pv,'a_p1')
+        u1     =self.get_jump_parameter_value(pv,'u1')
+        u2     =self.get_jump_parameter_value(pv,'u2')
+        gamma  =self.get_jump_parameter_value(pv,'gamma')
+        beta   =self.get_jump_parameter_value(pv,'vbeta')
+        #sigma  =self.get_jump_parameter_value(pv,'sigma')
         sigma  = vsini /1.31 # assume sigma is vsini/1.31 (see Hirano et al. 2010, 2011)
-        e      =self.get_value(pv,'ecc_p1')
-        omega  =self.get_value(pv,'omega_p1')
-        exptime=self.get_value(pv,'exptime')/86400. # exptime in days
+        e      =self.get_jump_parameter_value(pv,'ecc_p1')
+        omega  =self.get_jump_parameter_value(pv,'omega_p1')
+        exptime=self.get_jump_parameter_value(pv,'exptime')/86400. # exptime in days
         if times is None:
             times = self.data["x"]
         self.RH = RMHirano(lam,vsini,P,T0,aRs,ii,rprs,e,omega,[u1,u2],beta,
@@ -102,12 +105,12 @@ class LPFunction(object):
         """
         if times is None:
             times = self.data["x"]
-        T0      = self.get_value(pv,'t0_p1')
-        P       = self.get_value(pv,'P_p1')
-        gamma   = self.get_value(pv,'gamma')
-        K       = self.get_value(pv,'K_p1')
-        e       = self.get_value(pv,'ecc_p1')
-        w       = self.get_value(pv,'omega_p1')
+        T0      = self.get_jump_parameter_value(pv,'t0_p1')
+        P       = self.get_jump_parameter_value(pv,'P_p1')
+        gamma   = self.get_jump_parameter_value(pv,'gamma')
+        K       = self.get_jump_parameter_value(pv,'K_p1')
+        e       = self.get_jump_parameter_value(pv,'ecc_p1')
+        w       = self.get_jump_parameter_value(pv,'omega_p1')
         self.rv = get_rv_curve(times,P=P,tc=T0,e=e,omega=w,K=K)+gamma
         return self.rv
         
@@ -202,8 +205,18 @@ class RMFit(object):
             print("Finished MCMC")
             self.min_pv_mcmc = self.get_mean_values_mcmc_posteriors().medvals.values
     
-    def get_mean_values_mcmc_posteriors(self):
-        df_list = [utils.get_mean_values_for_posterior(self.sampler.flatchain[:,i],label,description) for i,label,description in zip(range(len(self.lpf.ps_vary.descriptions)),self.lpf.ps_vary.labels,self.lpf.ps_vary.descriptions)]
+    def get_mean_values_mcmc_posteriors(self,flatchain=None):
+        """
+        Get the mean values from the posteriors
+
+            flatchain - if not passed, then will default using the full flatchain (will likely include burnin)
+
+        EXAMPLE:
+        """
+        if flatchain is None:
+            flatchain = self.sampler.flatchain
+            print('No flatchain passed, defaulting to using full chains')
+        df_list = [utils.get_mean_values_for_posterior(flatchain[:,i],label,description) for i,label,description in zip(range(len(self.lpf.ps_vary.descriptions)),self.lpf.ps_vary.labels,self.lpf.ps_vary.descriptions)]
         return pd.concat(df_list) 
     
     def print_param_diagnostics(self,pv):
@@ -461,7 +474,7 @@ class RMHirano(object):
 
 def true_anomaly(time,T0,P,aRs,inc,ecc,omega):
     """
-    Uses the batman function to get the true anomaly
+    Uses the batman function to get the true anomaly. Note that some 
 
     INPUT:
         time - in days
@@ -475,6 +488,7 @@ def true_anomaly(time,T0,P,aRs,inc,ecc,omega):
     OUTPUT:
         True anomaly in radians
     """
+    # Some of the values here are just dummy values (limb dark etc.) to allow us to get the true anomaly
     params = batman.TransitParams()
     params.t0 = T0                           #time of inferior conjunction
     params.per = P                           #orbital period

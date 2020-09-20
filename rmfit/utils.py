@@ -332,18 +332,18 @@ def get_phases_sorted(t, P, t0,rvs=None,rvs_err=None,sort=True,centered_on_0=Tru
     Get a sorted pandas dataframe of phases, times (and Rvs if supplied)
     
     INPUT:
-    t  - times in jd
-    P  - period in days
-    t0 - time of periastron usually
+        t  - times in jd
+        P  - period in days
+        t0 - time of periastron usually
     
     OUTPUT:
-    df - pandas dataframe with columns:
-     -- phases (sorted)
-     -- time - time
-     -- rvs  - if provided
+        df - pandas dataframe with columns:
+         -- phases (sorted)
+         -- time - time
+         -- rvs  - if provided
     
     NOTES:
-    Useful for RVs.    
+        Useful for RVs.    
     """
     phases = np.mod(t - t0,P)
     phases /= P
@@ -417,22 +417,22 @@ def get_rv_curve(times_jd,P,tc,e,omega,K,plot=True,ax=None,verbose=True,plot_tno
 def get_mean_values_for_posterior(posterior,latexlabel="",description=""):
     """
     INPUT:
-    posterior - a array of posterior values
-    latexlabel- a latexlabel
-    description-a description of the posterior
+        posterior - a array of posterior values
+        latexlabel- a latexlabel
+        description-a description of the posterior
     
     OUTPUT:
-    a pandas dataframe with:
-    - medvals - minus - plus - values - Labels - Description
+        a pandas dataframe with:
+        - medvals - minus - plus - values - Labels - Description
     """
     dff = pd.DataFrame(data=posterior,columns=["_"])
-    df =  calc_medvals2(dff)
+    df =  calc_medvals(dff)
     df["values"] =  [latex_mean_low_up(df.medvals[i],df.minus[i],df.plus[i]) for i in range(len(df))]
     df["Labels"] =  [latexlabel]
     df["Description"] = [description]
     return df
 
-def calc_medvals2(df,lowerlevel=16.,upperlevel=84):
+def calc_medvals(df,lowerlevel=16.,upperlevel=84):
     """
     [mcFunc.latex_mean_low_up(b[i],c[i],d[i]) for i in range(len(a))]
 
@@ -460,6 +460,9 @@ def calc_medvals2(df,lowerlevel=16.,upperlevel=84):
     return pd.DataFrame(zip(medvals,minus,plus),columns=["medvals","minus","plus"])
 
 def latex_mean_low_up(mean,low,up,sig=2):
+    """
+    Get a nice LaTex string
+    """
     #latexstr = "%.10f_{-%.10f}^{+%.10f}" % (mean,low,up)
     f_low, round_to1 = round_sig(low,return_round_to=True,sig=sig)
     f_up,  round_to2 = round_sig(up,return_round_to=True,sig=sig)
