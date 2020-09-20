@@ -7,10 +7,10 @@ p_p1                  Normal            0.07227,0.0007
 a_p1                  Normal            9.0,3.0
 u1                    Normal            0.3,0.05
 u2                    Normal            0.3,0.05
-gamma                 Uniform           -400.,400.
 ecc_p1                Normal            0.501,0.007
 omega_p1              Normal            -172.6,1.6
 vbeta                 Normal            5.2,0.5
-#sigma                Normal            5.5,0.5
 K_p1                  Normal            1011.,38.
+gamma                 Uniform           -400.,400.
+sigma_rv              FIXED             0.
 exptime               FIXED             300.

@@ -37,7 +37,6 @@ class LPFunction(object):
         self.ps_vary  = PriorSet(np.array(self.ps_all.priors)[~np.array(self.ps_all.fixed)]) # varying priorset
         self.ps_fixed_dict = {key: val for key, val in zip(self.ps_fixed.labels,self.ps_fixed.args1)}
         print('Reading in priorfile from {}'.format(file_priors))
-        print('UPDATE5')
         print(self.ps_all.df)
         
     def get_jump_parameter_index(self,lab):
@@ -140,11 +139,20 @@ class LPFunction(object):
         """
         if any(pv < self.ps_vary.pmins) or any(pv>self.ps_vary.pmaxs):
             return -np.inf
-        flux_m = self.compute_total_model(pv)
+
+        ###############
+        # Prepare data and model and error for ingestion into likelihood
+        y_data = self.data['y']
+        y_model = self.compute_total_model(pv)
+        # jitter in quadrature
+        jitter = self.get_jump_parameter_value(pv,'sigma_rv')
+        error = np.sqrt(self.data['error']**2.+jitter**2.)
+        ###############
+
         # Return the log-likelihood
         log_of_priors = self.ps_vary.c_log_prior(pv)
-        scaled_flux   = self.data["y"]
-        log_of_model  = ll_normal_ev_py(scaled_flux, flux_m, self.data['error'])
+        # Calculate log likelihood
+        log_of_model  = ll_normal_ev_py(y_data, y_model, error)
         log_ln = log_of_priors + log_of_model
         return log_ln
 
@@ -165,7 +173,6 @@ class RMFit(object):
             return -1.*self.lpf(pv)
         self.min_pv = minimize(neg_lpf,centers,method='Nelder-Mead',tol=1e-9,
                                    options={'maxiter': 100000, 'maxfev': 10000, 'disp': True}).x
-            
     
     def minimize_PyDE(self,npop=100,de_iter=200,mc_iter=1000,mcmc=True,threads=8,maximize=True,plot_priors=True,sample_ball=False,k=None,n=None):
         """
@@ -227,48 +234,43 @@ class RMFit(object):
         print(self.df_diagnostics.to_string())
         return self.df_diagnostics
     
-    def plot_lc(self,pv,times=None):
+    def plot_fit(self,pv=None,times=None):
         """
         Plot the model curve for a given set of parameters pv
         
         INPUT:
-            pv - an array containing a sample draw of the parameters defined in self.lpf.ps
+            pv - an array containing a sample draw of the parameters defined in self.lpf.ps_vary
+               - will default to best-fit parameters if none are supplied
         """
-        self.scaled_flux   = self.lpf.data["y"]#/pv[self.lpf.number_pv_baseline]
-        self.model_trend   = self.lpf.compute_total_model(pv)
-        self.residual      = self.scaled_flux - self.model_trend
-        try:
-            self.scaled_error  = self.lpf.data["error"]#/pv[self.lpf.number_pv_baseline]
-        except Exception as e:
-            self.scaled_error = pv[self.lpf.number_pv_error]#/pv[self.lpf.number_pv_baseline]
-        
+        if pv is None:
+            print('Plotting curve with best-fit values')
+            pv = self.min_pv
+        x = self.lpf.data['x']
+        y = self.lpf.data['y']
+        jitter = self.lpf.get_jump_parameter_value(pv,'sigma_rv')
+        yerr = np.sqrt(self.lpf.data['error']**2.+jitter**2.)
+        model = self.lpf.compute_total_model(pv)
+        residuals = y-model
+            
         # Plot
         nrows = 2
-        self.fig, self.ax = plt.subplots(nrows=nrows,sharex=True,figsize=(10,6),
-                                         gridspec_kw={'height_ratios': [5, 2]})
-        self.ax[0].errorbar(self.lpf.data["x"],self.scaled_flux,yerr=self.scaled_error,
-                elinewidth=1,lw=0,alpha=1,capsize=5,mew=1,marker="o",barsabove=True,markersize=8,
-                            label="Data with trend")
-        self.ax[0].plot(self.lpf.data["x"],self.model_trend,label="Model with trend",color='crimson')
-        self.ax[1].errorbar(self.lpf.data["x"],self.residual,yerr=self.scaled_error,
-                elinewidth=1,lw=0,alpha=1,capsize=5,mew=1,marker="o",barsabove=True,markersize=8,
-                            label="residual, std="+str(np.std(self.residual)))
-        [self.ax[i].minorticks_on() for i in range(nrows)]
-        [self.ax[i].legend(loc="lower left",fontsize=8) for i in range(nrows)]
+        self.fig, self.ax = plt.subplots(nrows=nrows,sharex=True,figsize=(10,6),gridspec_kw={'height_ratios': [5, 2]})
+        self.ax[0].errorbar(x,y,yerr=yerr,elinewidth=1,lw=0,alpha=1,capsize=5,mew=1,marker="o",barsabove=True,markersize=8,label="Data")
+        self.ax[0].plot(x,model,label="Model",color='crimson')
+        self.ax[1].errorbar(x,residuals,yerr=yerr,elinewidth=1,lw=0,alpha=1,capsize=5,mew=1,marker="o",barsabove=True,markersize=8,
+                            label="Residuals, std="+str(np.std(residuals)))
+        for xx in self.ax:
+            xx.minorticks_on()
+            xx.legend(loc='lower left',fontsize=9)
+            xx.set_ylabel("RV [m/s]",labelpad=2)
         self.ax[-1].set_xlabel("Time (BJD)",labelpad=2)
-        [self.ax[i].set_ylabel("RV [m/s]",labelpad=2) for i in range(nrows)]
         self.ax[0].set_title("RM Effect")
         self.fig.subplots_adjust(wspace=0.05,hspace=0.05)
         
-    def plot_lc_fit(self):
-        """
-        Plot the best fit
-        """
-        self.plot_lc(self.min_pv)
-
-    def plot_lc_mcmc_fit(self,times=None): 
+    def plot_mcmc_fit(self,times=None): 
         df = self.get_mean_values_mcmc_posteriors()
-        self.plot_lc(df.medvals.values)   
+        print('Plotting curve with best-fit mcmc values')
+        self.plot_fit(pv=df.medvals.values)   
 
 def read_priors(priorname):
     """
