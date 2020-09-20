@@ -8,6 +8,7 @@ Should be able to do the following:
 
 ```
 git clone git@github.com:gummiks/rmfit.git
+cd rmfit
 python setup.py install
 ```
 
