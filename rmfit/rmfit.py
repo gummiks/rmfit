@@ -294,8 +294,9 @@ def read_priors(priorname):
         line = fin.readline()
         if line != '': 
             if line[0] != '#':
+                line = line.split('#')[0] # remove things after comment
                 out = line.split()
-                parameter,prior_name,vals = line.split()
+                parameter,prior_name,vals = out
                 parameter = parameter.split()[0]
                 prior_name = prior_name.split()[0]
                 vals = vals.split()[0]
