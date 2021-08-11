@@ -159,25 +159,25 @@ class LPFunction(object):
 class RMFit(object):
     """
     A class that does RM fitting.
-    
+
     NOTES:
         - Needs to have LPFunction defined
     """
     def __init__(self,LPFunction):
         self.lpf = LPFunction
-    
+
     def minimize_AMOEBA(self):
         centers = np.array(self.lpf.ps_vary.centers)
-        
+
         def neg_lpf(pv):
             return -1.*self.lpf(pv)
         self.min_pv = minimize(neg_lpf,centers,method='Nelder-Mead',tol=1e-9,
                                    options={'maxiter': 100000, 'maxfev': 10000, 'disp': True}).x
-    
+
     def minimize_PyDE(self,npop=100,de_iter=200,mc_iter=1000,mcmc=True,threads=8,maximize=True,plot_priors=True,sample_ball=False,k=None,n=None):
         """
         Minimize using the PyDE
-        
+
         NOTES:
             see https://github.com/hpparvi/PyDE
         """
@@ -199,7 +199,7 @@ class RMFit(object):
         if mcmc:
             print("Running MCMC")
             self.sampler = emcee.EnsembleSampler(npop, self.lpf.ps_vary.ndim, self.lpf,threads=threads)
-            
+
             #pb = ipywidgets.IntProgress(max=mc_iter/50)
             #display(pb)
             #val = 0
@@ -211,7 +211,7 @@ class RMFit(object):
                     #pb.value += 1
             print("Finished MCMC")
             self.min_pv_mcmc = self.get_mean_values_mcmc_posteriors().medvals.values
-    
+
     def get_mean_values_mcmc_posteriors(self,flatchain=None):
         """
         Get the mean values from the posteriors
@@ -267,10 +267,10 @@ class RMFit(object):
         self.ax[0].set_title("RM Effect")
         self.fig.subplots_adjust(wspace=0.05,hspace=0.05)
 
-    def plot_mcmc_fit(self,times=None): 
+    def plot_mcmc_fit(self,times=None):
         df = self.get_mean_values_mcmc_posteriors()
         print('Plotting curve with best-fit mcmc values')
-        self.plot_fit(pv=df.medvals.values)   
+        self.plot_fit(pv=df.medvals.values)
 
 def read_priors(priorname):
     """
@@ -418,14 +418,14 @@ class RMHirano(object):
         self.exp_time = exp_time
         self.supersample_factor = int(supersample_factor)
         self._Omega = (self.vsini/np.sin(np.deg2rad(self.iS)))/(self.rstar*aconst.R_sun.value/1000.)
-        
+
     def true_anomaly(self,times):
         """
         Calculate the true anomaly
         """
         f = true_anomaly(times,self.T0,self.P,self.aRs,self.i,self.e,self.w)
         return f
-    
+
     def calc_transit(self,times):
         """
         Calculate transit model of planet
@@ -440,18 +440,18 @@ class RMHirano(object):
         params.w = self.w
         params.u = self.u
         params.limb_dark = self.limb_dark
-        params.fp = 0.001     
+        params.fp = 0.001
         transitmodel = batman.TransitModel(params, times, transittype='primary',exp_time=self.exp_time,
                                          supersample_factor=self.supersample_factor)
         return transitmodel.light_curve(params)
-    
+
     def planet_XYZ_position(self,times):
         """
         Get the planet XYZ position at times
         """
         X, Y, Z = planet_XYZ_position(times,self.T0,self.P,self.aRs,self.i,self.e,self.w)
         return X, Y, Z
-    
+
     def Xp(self,times):
         lam, w, i = np.deg2rad(self.lam), np.deg2rad(self.w), np.deg2rad(self.i)
         f = self.true_anomaly(times)
@@ -522,7 +522,7 @@ def planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega):
         X - planet X position
         Y - planet Y position
         Z - planet Z position
-    
+
     EXAMPLE:
         Rstar = 1.
         Mstar = 1.
@@ -532,7 +532,7 @@ def planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega):
         P = 1.1
         T0 = 1.1
         Rp = 0.1
-        aRs = 
+        aRs =
         print(aRs)
         x_1, y_1, z_1 = planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega)
         fig, ax = plt.subplots()
