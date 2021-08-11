@@ -33,24 +33,24 @@ class PriorSet(object):
     @property
     def names(self):
         return [p.name for p in self.priors]
-    
+
     # EXTENDING
     @property
     def descriptions(self):
         return [p.description for p in self.priors]
-    
+
     @property
     def centers(self):
         return [p.center for p in self.priors]
-    
+
     @property
     def labels(self):
         return [p.name for p in self.priors]
-    
+
     @property
     def random(self):
         return [p.random()[0] for p in self.priors]
-    
+
     @property
     def priortypes(self):
         return [p.priortype for p in self.priors]
@@ -75,7 +75,7 @@ class PriorSet(object):
     def df(self):
         return pd.DataFrame(list(zip(self.ids,self.args1,self.args2,self.labels,self.descriptions,self.priortypes,self.fixed)),
                 columns=['prior','arg1','arg2','label','description','priortype','fixed'])
-    
+
     @property
     def detrendparams(self):
         priortypes = self.priortypes
@@ -248,6 +248,6 @@ class DummyPrior(Prior):
 UP = UniformPrior
 JP = JeffreysPrior
 GP = NormalPrior
-NP = NormalPrior 
+NP = NormalPrior
 DP = DummyPrior
 FP = FixedPrior

@@ -5,21 +5,21 @@ import scipy.stats as stats
 def bic_from_likelihood(lnL,k,n):
     """
     Baysian information criterion (BIC). The model with the lowest BIC is preferred.
-    
+
     INPUT:
         lnL - maximum likelihood value
         k - number of model parameters in the test
         n - number of points
-        
+
     NOTE:
         lower BIC is better
         https://en.wikipedia.org/wiki/Bayesian_information_criterion
 
         DeltaBIC       Evidence against higher BIC
-        0 to 2	       Not worth more than a bare mention
-        2 to 6	       Positive
-        6 to 10	       Strong
-        >10	       Very strong
+        0 to 2         Not worth more than a bare mention
+        2 to 6         Positive
+        6 to 10        Strong
+        >10            Very strong
     """
     bic = -2.*lnL + k*np.log(n)
     return bic
@@ -27,11 +27,11 @@ def bic_from_likelihood(lnL,k,n):
 def bic(residuals,errors,k,verbose=False):
     """
     Baysian information criterion (BIC). The model with the lowest BIC is preferred.
-    
+
     INPUT:
-        residuals - residuals 
+        residuals - residuals
         k - number of model parameters in the test
-        
+
     NOTE:
         CAN ONLY DO MODEL COMPARISON IF THE ERRORS ARE THE SAME (Gibson et al. 2014)
 
@@ -39,10 +39,10 @@ def bic(residuals,errors,k,verbose=False):
         https://en.wikipedia.org/wiki/Bayesian_information_criterion
 
         DeltaBIC       Evidence against higher BIC
-        0 to 2	       Not worth more than a bare mention
-        2 to 6	       Positive
-        6 to 10	       Strong
-        >10	       Very strong
+        0 to 2         Not worth more than a bare mention
+        2 to 6         Positive
+        6 to 10        Strong
+        >10            Very strong
     """
     _chi2 = chi2(residuals,errors,k,verbose=verbose)
     #_chi2 = np.sum(residuals**2.)
