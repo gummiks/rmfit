@@ -372,15 +372,15 @@ class RMHirano(object):
             lam - sky-projected obliquity in deg
             vsini - sky-projected rotational velocity in km/s
             P - Period in days
-            T0 - Transit center 
+            T0 - Transit center
             aRs - a/R*
             i - inclination in degrees
             RpRs - radius ratio
             e - eccentricity
             w - omega in degrees
             u - [u1,u2] where u1 and u2 are the quadratic limb-dark coefficients
-            beta - beta 
-            sigma - sigma
+            beta - Gaussian dispersion of spectral lines, in km/s, typically 2.5-4.5km/s (see Hirano+11)
+            sigma - Gaussian broadening kernel from Hirano+10. Hirano+10 found vsini/1.31 as an approximation that sometimes works (Why?).
 
         EXAMPLE:
             times = np.linspace(-0.05,0.05,200)
