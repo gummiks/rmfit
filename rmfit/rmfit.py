@@ -113,6 +113,30 @@ class LPFunction(object):
         self.rv = get_rv_curve(times,P=P,tc=T0,e=e,omega=w,K=K)+gamma
         return self.rv
 
+    def compute_polynomial_model(self,pv,times=None):
+        """
+        Compute the polynomial model
+
+        INPUT:
+            pv    - a list of parameters (only parameters that are being varied)
+            times - times (optional), array of timestamps
+
+        OUTPUT:
+            poly - the polynomial model evaluated at 'times' if supplied,
+                   otherwise defaults to original data timestamps
+        """
+        if times is None:
+            times = self.data["x"]
+
+        T0 = self.get_jump_parameter_value(pv,'t0_p1')
+        gammadot = self.get_jump_parameter_value(pv,'gammadot')
+        gammadotdot = self.get_jump_parameter_value(pv,'gammadotdot')
+        self.poly = (
+            gammadot * (times - T0) +
+            gammadotdot * (times - T0)**2
+        )
+        return self.poly
+
     def compute_total_model(self,pv,times=None):
         """
         Computes the full RM model (including RM and RV)
@@ -126,9 +150,14 @@ class LPFunction(object):
                       defaults to original data timestamps
 
         NOTES:
-            see compute_rm_model(), compute_rv_model()
+            see compute_rm_model(), compute_rv_model(),
+            compute_polynomial_model()
         """
-        return self.compute_rm_model(pv,times=times) + self.compute_rv_model(pv,times=times)
+        return (
+            self.compute_rm_model(pv,times=times) +
+            self.compute_rv_model(pv,times=times) +
+            self.compute_polynomial_model(pv,times=times)
+        )
 
     def __call__(self,pv):
         """
