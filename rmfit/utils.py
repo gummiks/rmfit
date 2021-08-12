@@ -58,15 +58,15 @@ def vac2air(wavelength,P,T,input_in_angstroms=True):
 def n_air(P,T,wavelength):
     """
     The edlen equation for index of refraction of air with pressure
-    
+
     INPUT:
         P - pressure in Torr
         T - Temperature in Celsius
         wavelength - wavelength in nm
-        
+
     OUTPUT:
         (n-1)_tp - see equation 1, and 2 in REF below.
-        
+
     REF:
         http://iopscience.iop.org/article/10.1088/0026-1394/30/3/004/pdf
 
@@ -158,7 +158,7 @@ def remove_items_from_list(l,bad_items):
 def savefigure(fig,savename,s1='{}',p1='',s2='{}',p2='',dpi=200):
     """
     Handy function to save figures and append suffixes to filenames
-    
+
     EXAMPLE:
         savefigure(fig,'MASTER_FLATS/COMPARE_PLOTS/testing.png',s1='_o{}',p1=5,s2='_spi{}',p2=14)
     """
@@ -330,20 +330,20 @@ def plot_rv_model_phased(bjd,RV,e_RV,P,T0,K,e,w,nbjd=None,nRV=None,ne_RV=None,ti
 def get_phases_sorted(t, P, t0,rvs=None,rvs_err=None,sort=True,centered_on_0=True,tdur=None):
     """
     Get a sorted pandas dataframe of phases, times (and Rvs if supplied)
-    
+
     INPUT:
         t  - times in jd
         P  - period in days
         t0 - time of periastron usually
-    
+
     OUTPUT:
         df - pandas dataframe with columns:
          -- phases (sorted)
          -- time - time
          -- rvs  - if provided
-    
+
     NOTES:
-        Useful for RVs.    
+        Useful for RVs.
     """
     phases = np.mod(t - t0,P)
     phases /= P
@@ -367,7 +367,7 @@ def get_phases_sorted(t, P, t0,rvs=None,rvs_err=None,sort=True,centered_on_0=Tru
 def get_rv_curve(times_jd,P,tc,e,omega,K,plot=True,ax=None,verbose=True,plot_tnow=True):
     """
     A function to plot an RV curve as a function of time (not phased)
-    
+
     INPUT:
         times_jd: times in jd
         P: orbital period in days
@@ -375,7 +375,7 @@ def get_rv_curve(times_jd,P,tc,e,omega,K,plot=True,ax=None,verbose=True,plot_tno
         e: eccentricity
         omega: periastron in degrees
         K: RV semi-amplitude in m/s
-    
+
     OUTPUT:
         rv: array of RVs at times times_jd
     """
@@ -420,7 +420,7 @@ def get_mean_values_for_posterior(posterior,latexlabel="",description=""):
         posterior - a array of posterior values
         latexlabel- a latexlabel
         description-a description of the posterior
-    
+
     OUTPUT:
         a pandas dataframe with:
         - medvals - minus - plus - values - Labels - Description
