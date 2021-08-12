@@ -115,7 +115,8 @@ class LPFunction(object):
 
     def compute_polynomial_model(self,pv,times=None):
         """
-        Compute the polynomial model
+        Compute the polynomial model.  Note that if gammadot and gammadotdot
+        are not specified in the priors file, they both default to zero.
 
         INPUT:
             pv    - a list of parameters (only parameters that are being varied)
@@ -129,8 +130,15 @@ class LPFunction(object):
             times = self.data["x"]
 
         T0 = self.get_jump_parameter_value(pv,'t0_p1')
-        gammadot = self.get_jump_parameter_value(pv,'gammadot')
-        gammadotdot = self.get_jump_parameter_value(pv,'gammadotdot')
+        try:
+            gammadot = self.get_jump_parameter_value(pv,'gammadot')
+        except KeyError as e:
+            gammadot = 0
+        try:
+            gammadotdot = self.get_jump_parameter_value(pv,'gammadotdot')
+        except KeyError as e:
+            gammadotdot = 0
+
         self.poly = (
             gammadot * (times - T0) +
             gammadotdot * (times - T0)**2
