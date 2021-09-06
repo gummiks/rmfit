@@ -58,7 +58,7 @@ def gelman_rubin(chains):
     """
     Calculates the gelman rubin statistic.
 
-    # NOTE: 
+    # NOTE:
         Should be close to 1
     """
     nwalker = chains.shape[0]

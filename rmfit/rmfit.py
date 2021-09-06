@@ -414,7 +414,7 @@ class LPFunction2(object):
 class LPFunction(object):
     """
     Log-Likelihood function class
-       
+
     NOTES:
         Based on hpprvi's class, see: https://github.com/hpparvi/exo_tutorials
     """
@@ -426,8 +426,8 @@ class LPFunction(object):
             yerr - yerr values in m/s
             file_priors - prior file name
         """
-        self.data= {"x"   : x,  
-                    "y"   : y,   
+        self.data= {"x"   : x,
+                    "y"   : y,
                     "error"  : yerr}
         # Setting priors
         self.ps_all = priorset_from_file(file_priors) # all priors
@@ -436,13 +436,13 @@ class LPFunction(object):
         self.ps_fixed_dict = {key: val for key, val in zip(self.ps_fixed.labels,self.ps_fixed.args1)}
         print('Reading in priorfile from {}'.format(file_priors))
         print(self.ps_all.df)
-        
+
     def get_jump_parameter_index(self,lab):
         """
         Get the index of a given label
         """
         return np.where(np.array(self.ps_vary.labels)==lab)[0][0]
-    
+
     def get_jump_parameter_value(self,pv,lab):
         """
         Get the current value in the argument list 'pv' that has label 'lab'
@@ -453,22 +453,22 @@ class LPFunction(object):
         else:
             # We are not varying it
             return self.ps_fixed_dict[lab]
-        
+
     def compute_rm_model(self,pv,times=None):
         """
         Calls RM model and returns the transit model
-        
+
         INPUT:
-            pv    - parameters passed to the function 
-            times - times, and array of timestamps 
-        
+            pv    - parameters passed to the function
+            times - times, and array of timestamps
+
         OUTPUT:
             lc - the lightcurve model at *times*
         """
         T0     =self.get_jump_parameter_value(pv,'t0_p1')
         P      =self.get_jump_parameter_value(pv,'P_p1')
         lam    =self.get_jump_parameter_value(pv,'lam_p1')
-        vsini  =self.get_jump_parameter_value(pv,'vsini') 
+        vsini  =self.get_jump_parameter_value(pv,'vsini')
         ii     =self.get_jump_parameter_value(pv,'inc_p1')
         rprs   =self.get_jump_parameter_value(pv,'p_p1')
         aRs    =self.get_jump_parameter_value(pv,'a_p1')
@@ -527,10 +527,10 @@ class LPFunction(object):
 
         INPUT:
             pv    - a list of parameters (only parameters that are being varied)
-            times - times (optional), array of timestamps 
-        
+            times - times (optional), array of timestamps
+
         OUTPUT:
-            rv - the rv model evaluated at 'times' if supplied, otherwise 
+            rv - the rv model evaluated at 'times' if supplied, otherwise
                       defaults to original data timestamps
         """
         if times is None:
@@ -543,25 +543,64 @@ class LPFunction(object):
         w       = self.get_jump_parameter_value(pv,'omega_p1')
         self.rv = get_rv_curve(times,P=P,tc=T0,e=e,omega=w,K=K)+gamma
         return self.rv
-        
+
+    def compute_polynomial_model(self,pv,times=None):
+        """
+        Compute the polynomial model.  Note that if gammadot and gammadotdot
+        are not specified in the priors file, they both default to zero.
+
+        INPUT:
+            pv    - a list of parameters (only parameters that are being varied)
+            times - times (optional), array of timestamps
+
+        OUTPUT:
+            poly - the polynomial model evaluated at 'times' if supplied,
+                   otherwise defaults to original data timestamps
+        """
+        if times is None:
+            times = self.data["x"]
+
+        T0 = self.get_jump_parameter_value(pv,'t0_p1')
+        try:
+            gammadot = self.get_jump_parameter_value(pv,'gammadot')
+        except KeyError as e:
+            gammadot = 0
+        try:
+            gammadotdot = self.get_jump_parameter_value(pv,'gammadotdot')
+        except KeyError as e:
+            gammadotdot = 0
+
+        self.poly = (
+            gammadot * (times - T0) +
+            gammadotdot * (times - T0)**2
+        )
+        return self.poly
+
     def compute_total_model(self,pv,times=None):
         """
         Computes the full RM model (including RM and RV and CB)
 
         INPUT:
             pv    - a list of parameters (only parameters that are being varied)
-            times - times (optional), array of timestamps 
-        
+            times - times (optional), array of timestamps
+
         OUTPUT:
-            rm - the rm model evaluated at 'times' if supplied, otherwise 
+            rm - the rm model evaluated at 'times' if supplied, otherwise
                       defaults to original data timestamps
 
         NOTES:
-            see compute_rm_model(), compute_rv_model()
+            see compute_rm_model(), compute_rv_model(),
+            compute_polynomial_model()
         """
         #return self.compute_rm_model(pv,times=times) + self.compute_rv_model(pv,times=times)
         return self.compute_rm_model(pv,times=times) + self.compute_rv_model(pv,times=times) + self.compute_cb_model(pv,times=times)
                     
+        return (
+            self.compute_rm_model(pv,times=times) +
+            self.compute_rv_model(pv,times=times) +
+            self.compute_polynomial_model(pv,times=times)
+        )
+
     def __call__(self,pv):
         """
         Return the log likelihood
@@ -591,25 +630,25 @@ class LPFunction(object):
 class RMFit(object):
     """
     A class that does RM fitting.
-    
+
     NOTES:
         - Needs to have LPFunction defined
     """
     def __init__(self,LPFunction):
         self.lpf = LPFunction
-    
+
     def minimize_AMOEBA(self):
         centers = np.array(self.lpf.ps_vary.centers)
-        
+
         def neg_lpf(pv):
             return -1.*self.lpf(pv)
         self.min_pv = minimize(neg_lpf,centers,method='Nelder-Mead',tol=1e-9,
                                    options={'maxiter': 100000, 'maxfev': 10000, 'disp': True}).x
-    
+
     def minimize_PyDE(self,npop=100,de_iter=200,mc_iter=1000,mcmc=True,threads=8,maximize=True,plot_priors=True,sample_ball=False,k=None,n=None):
         """
         Minimize using the PyDE
-        
+
         NOTES:
             see https://github.com/hpparvi/PyDE
         """
@@ -631,7 +670,7 @@ class RMFit(object):
         if mcmc:
             print("Running MCMC")
             self.sampler = emcee.EnsembleSampler(npop, self.lpf.ps_vary.ndim, self.lpf,threads=threads)
-            
+
             #pb = ipywidgets.IntProgress(max=mc_iter/50)
             #display(pb)
             #val = 0
@@ -643,7 +682,7 @@ class RMFit(object):
                     #pb.value += 1
             print("Finished MCMC")
             self.min_pv_mcmc = self.get_mean_values_mcmc_posteriors().medvals.values
-    
+
     def get_mean_values_mcmc_posteriors(self,flatchain=None):
         """
         Get the mean values from the posteriors
@@ -656,8 +695,8 @@ class RMFit(object):
             flatchain = self.sampler.flatchain
             print('No flatchain passed, defaulting to using full chains')
         df_list = [utils.get_mean_values_for_posterior(flatchain[:,i],label,description) for i,label,description in zip(range(len(self.lpf.ps_vary.descriptions)),self.lpf.ps_vary.labels,self.lpf.ps_vary.descriptions)]
-        return pd.concat(df_list) 
-    
+        return pd.concat(df_list)
+
     def print_param_diagnostics(self,pv):
         """
         A function to print nice parameter diagnostics.
@@ -665,11 +704,11 @@ class RMFit(object):
         self.df_diagnostics = pd.DataFrame(zip(self.lpf.ps_vary.labels,self.lpf.ps_vary.centers,self.lpf.ps_vary.bounds[:,0],self.lpf.ps_vary.bounds[:,1],pv,self.lpf.ps_vary.centers-pv),columns=["labels","centers","lower","upper","pv","center_dist"])
         print(self.df_diagnostics.to_string())
         return self.df_diagnostics
-    
+
     def plot_fit(self,pv=None,times=None):
         """
         Plot the model curve for a given set of parameters pv
-        
+
         INPUT:
             pv - an array containing a sample draw of the parameters defined in self.lpf.ps_vary
                - will default to best-fit parameters if none are supplied
@@ -684,6 +723,9 @@ class RMFit(object):
         model_obs = self.lpf.compute_total_model(pv)
         residuals = y-model_obs
             
+        model = self.lpf.compute_total_model(pv)
+        residuals = y-model
+
         # Plot
         nrows = 2
         self.fig, self.ax = plt.subplots(nrows=nrows,sharex=True,figsize=(10,6),gridspec_kw={'height_ratios': [5, 2]})
@@ -703,20 +745,20 @@ class RMFit(object):
         self.ax[-1].set_xlabel("Time (BJD)",labelpad=2)
         self.ax[0].set_title("RM Effect")
         self.fig.subplots_adjust(wspace=0.05,hspace=0.05)
-        
-    def plot_mcmc_fit(self,times=None): 
+
+    def plot_mcmc_fit(self,times=None):
         df = self.get_mean_values_mcmc_posteriors()
         print('Plotting curve with best-fit mcmc values')
-        self.plot_fit(pv=df.medvals.values)   
+        self.plot_fit(pv=df.medvals.values)
 
 def read_priors(priorname):
     """
     Read a prior file as in juliet.py style
-    
+
     OUTPUT:
         priors - prior dictionary
         n_params - number of parameters
-        
+
     EXAMPLE:
         P, numpriors = read_priors('../data/priors.dat')
     """
@@ -729,7 +771,7 @@ def read_priors(priorname):
     numbering_rv = np.array([])
     while True:
         line = fin.readline()
-        if line != '': 
+        if line != '':
             if line[0] != '#':
                 line = line.split('#')[0] # remove things after comment
                 out = line.split()
@@ -782,11 +824,11 @@ def priordict_to_priorset(priordict,verbose=True):
         inp = priordict[key]
         if verbose: print(key)
         val = inp['value']
-        if inp['type'] == 'normal': 
+        if inp['type'] == 'normal':
             outp = NP(val[0],val[1],key,key,priortype='model')
         elif inp['type'] == 'uniform':
             outp = UP(val[0],val[1],key,key,priortype='model')
-        elif inp['type'] == 'fixed':  
+        elif inp['type'] == 'fixed':
             outp = FP(val,key,key,priortype='model')
         else:
             print('Error, ptype {} not supported'.format(inp['type']))
@@ -809,15 +851,15 @@ class RMHirano(object):
             lam - sky-projected obliquity in deg
             vsini - sky-projected rotational velocity in km/s
             P - Period in days
-            T0 - Transit center 
+            T0 - Transit center
             aRs - a/R*
             i - inclination in degrees
             RpRs - radius ratio
             e - eccentricity
             w - omega in degrees
             u - [u1,u2] where u1 and u2 are the quadratic limb-dark coefficients
-            beta - beta 
-            sigma - sigma
+            beta - Gaussian dispersion of spectral lines, in km/s, typically 2.5-4.5km/s (see Hirano+11)
+            sigma - Gaussian broadening kernel from Hirano+10. Hirano+10 found vsini/1.31 as an approximation that sometimes works (Why?).
 
         EXAMPLE:
             times = np.linspace(-0.05,0.05,200)
@@ -855,14 +897,14 @@ class RMHirano(object):
         self.exp_time = exp_time
         self.supersample_factor = int(supersample_factor)
         self._Omega = (self.vsini/np.sin(np.deg2rad(self.iS)))/(self.rstar*aconst.R_sun.value/1000.)
-        
+
     def true_anomaly(self,times):
         """
         Calculate the true anomaly
         """
         f = true_anomaly(times,self.T0,self.P,self.aRs,self.i,self.e,self.w)
         return f
-    
+
     def calc_transit(self,times):
         """
         Calculate transit model of planet
@@ -877,18 +919,18 @@ class RMHirano(object):
         params.w = self.w
         params.u = self.u
         params.limb_dark = self.limb_dark
-        params.fp = 0.001     
+        params.fp = 0.001
         transitmodel = batman.TransitModel(params, times, transittype='primary',exp_time=self.exp_time,
                                          supersample_factor=self.supersample_factor)
         return transitmodel.light_curve(params)
-    
+
     def planet_XYZ_position(self,times):
         """
         Get the planet XYZ position at times
         """
         X, Y, Z = planet_XYZ_position(times,self.T0,self.P,self.aRs,self.i,self.e,self.w)
         return X, Y, Z
-    
+
     def Xp(self,times):
         lam, w, i = np.deg2rad(self.lam), np.deg2rad(self.w), np.deg2rad(self.i)
         f = self.true_anomaly(times)
@@ -959,7 +1001,7 @@ def planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega):
         X - planet X position
         Y - planet Y position
         Z - planet Z position
-    
+
     EXAMPLE:
         Rstar = 1.
         Mstar = 1.
@@ -969,7 +1011,7 @@ def planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega):
         P = 1.1
         T0 = 1.1
         Rp = 0.1
-        aRs = 
+        aRs =
         print(aRs)
         x_1, y_1, z_1 = planet_XYZ_position(time,T0,P,aRs,inc,ecc,omega)
         fig, ax = plt.subplots()
