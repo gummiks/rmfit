@@ -286,6 +286,9 @@ class LPFunction2(object):
         aRs     =self.get_jump_parameter_value(pv,'a_p1')
         u1      =self.get_jump_parameter_value(pv,'u1')
         u2      =self.get_jump_parameter_value(pv,'u2')
+        #q1      =self.get_jump_parameter_value(pv,'q1')
+        #q2      =self.get_jump_parameter_value(pv,'q2')
+        #u1, u2 = u1_u2_from_q1_q2(q1,q2)
         gamma1  =self.get_jump_parameter_value(pv,'gamma1')
         gamma2  =self.get_jump_parameter_value(pv,'gamma2')
         beta    =self.get_jump_parameter_value(pv,'vbeta')
@@ -592,13 +595,11 @@ class LPFunction(object):
             see compute_rm_model(), compute_rv_model(),
             compute_polynomial_model()
         """
-        #return self.compute_rm_model(pv,times=times) + self.compute_rv_model(pv,times=times)
-        return self.compute_rm_model(pv,times=times) + self.compute_rv_model(pv,times=times) + self.compute_cb_model(pv,times=times)
-                    
         return (
             self.compute_rm_model(pv,times=times) +
             self.compute_rv_model(pv,times=times) +
-            self.compute_polynomial_model(pv,times=times)
+            self.compute_polynomial_model(pv,times=times) +
+            self.compute_cb_model(pv,times=times)
         )
 
     def __call__(self,pv):
@@ -1044,3 +1045,7 @@ def get_rv_curve(times_jd,P,tc,e,omega,K):
     t_peri = radvel.orbit.timetrans_to_timeperi(tc=tc,per=P,ecc=e,omega=np.deg2rad(omega))
     rvs = radvel.kepler.rv_drive(times_jd,[P,t_peri,e,np.deg2rad(omega),K])
     return rvs
+
+def u1_u2_from_q1_q2(q1,q2):
+    u1, u2 = 2.*np.sqrt(q1)*q2, np.sqrt(q1)*(1.-2*q2)
+    return u1, u2

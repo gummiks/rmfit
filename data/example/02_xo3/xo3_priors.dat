@@ -14,3 +14,6 @@ K_p1                  Normal            1488.,10.
 gamma                 Uniform           -400.,400.
 sigma_rv              Uniform           0.,30.
 exptime               FIXED             350.
+gammadot              FIXED             0.
+gammadotdot           FIXED             0.
+vcb                   FIXED             0.

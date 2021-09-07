@@ -16,3 +16,4 @@ sigma_rv              FIXED             0.
 exptime               FIXED             300.
 gammadot              FIXED             0.
 gammadotdot           FIXED             0.
+vcb                   FIXED             0.
