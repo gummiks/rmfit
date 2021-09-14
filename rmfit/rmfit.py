@@ -666,8 +666,18 @@ class RMFit(object):
         print("LnL value:",self.lnl_max)
         print("Log priors",self.lpf.ps_vary.c_log_prior(self.min_pv))
         if k is not None and n is not None:
-            print("BIC:",stats_help.bic_from_likelihood(self.lnl_max,k,n))
-            print("AIC:",stats_help.aic(k,self.lnl_max))
+            # relevant quantities to compute chi2
+            pv = self.min_pv
+            x = self.lpf.data['x']
+            y = self.lpf.data['y']
+            jitter = self.lpf.get_jump_parameter_value(pv,'sigma_rv')
+            yerr = np.sqrt(self.lpf.data['error']**2.+jitter**2.)
+            model = self.lpf.compute_total_model(pv)
+            residuals = y-model
+            print(f"chi2: {stats_help.chi2(residuals,yerr,k,return_reduced=False,verbose=False):.3f}")
+            print(f"chi2red: {stats_help.chi2(residuals,yerr,k,return_reduced=True,verbose=False):.3f}")
+            print(f"BIC: {stats_help.bic_from_likelihood(self.lnl_max,k,n):.3f}")
+            print(f"AIC: {stats_help.aic(k,self.lnl_max):.3f}")
         if mcmc:
             print("Running MCMC")
             self.sampler = emcee.EnsembleSampler(npop, self.lpf.ps_vary.ndim, self.lpf,threads=threads)
