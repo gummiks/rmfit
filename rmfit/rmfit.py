@@ -394,6 +394,10 @@ class LPFunction2(object):
         if any(pv < self.ps_vary.pmins) or any(pv>self.ps_vary.pmaxs):
             return -np.inf
 
+        ii =self.get_jump_parameter_value(pv,'inc_p1')
+        if ii > 90:
+            return -np.inf
+
         ###############
         # Prepare data and model and error for ingestion into likelihood
         #y_data = self.data['y']
@@ -1049,3 +1053,167 @@ def get_rv_curve(times_jd,P,tc,e,omega,K):
 def u1_u2_from_q1_q2(q1,q2):
     u1, u2 = 2.*np.sqrt(q1)*q2, np.sqrt(q1)*(1.-2*q2)
     return u1, u2
+
+def b_from_aRs_and_i(aRs,i):
+    return aRs*np.cos(np.deg2rad(i))
+
+def simulate_rm_curve(P,aRs,inc,vsini,rprs,rvprec,exptime,e,omega,vmacro,lam=0.,T0=0.,u=[0.4,0.2],ntransits=1,NBIN=2,seed=1234,sim_dur=6.,R=110000,
+                      ax=None,targetname='',instrumentname='',savefig=True):
+    """
+    Simulate RM curve for a given target
+
+    INPUT:
+        P - period in days
+        aRs - a/R*
+        inc - inclination in deg
+        vsini - vsini in km/s
+        rprs - Rp/R*
+        rvprec - rvprecision in a given timebin given by *exptime*
+        exptime - exposure time in s
+        e - eccentricity
+        omega - argument of periastron in deg
+        lam - lambda in deg
+        T0 - transit midpoint (defaults to 0)
+        u - quadratic limb-darkening params
+        ntransits - how many transits observed
+        NBIN - how often to bin the overplotted binned curve (just used for plotting)
+        seed - random seed
+        sim_dur - how many hours to simulate the data
+        R - resolution of the spectrograph
+        ax - axis instance
+        targetname - target name
+        instrumentname - instrument name
+
+    OUTPUT:
+       time - simulated time in hours
+       rv - simulated RM curve
+       errors - errors in m/s
+    
+    EXAMPLE:
+        rvprec = astropylib.maroonx_help.get_maroonx_rvprec_snr_cadence(13.8941,4400.,exptime=500.,vsini=2.2,)
+        x, y, yerr = astropylib.exoplanet_functions.simulate_rm_curve(instrument='Maroon-X',
+                                                     target='K2-295b',
+                                                     P=4.024867,
+                                                     aRs=13.854,
+                                                     inc=89.3,
+                                                     vsini=2.2,
+                                                     rprs=0.1304,
+                                                     rvprec=3.4475,
+                                                     exptime=600.,
+                                                     sim_dur=6.)
+    """
+    np.random.seed(seed)
+
+    zbeta = 300000./R
+    beta = np.sqrt(zbeta**2. + vmacro**2.)
+    sigma = vsini/1.31
+    impact_parameter = b_from_aRs_and_i(aRs,inc)
+
+    # ERROR AND OBSTIME
+    error = rvprec/np.sqrt(ntransits)
+    exptime = exptime/86400. # change from s to days
+    x = np.linspace(-sim_dur/(2*24),sim_dur/(2*24),num=200)
+    _f = get_lc_batman(x,T0,P,inc,rprs,aRs,e,omega,u=u)
+    _m = _f < 1.
+    tdur = x[np.where(_m)[0][-1]]-x[np.where(_m)[0][0]]
+    num_in_transit = int(tdur/exptime)
+    print('Transit duration:',tdur*24,'hours')
+    print('Number of Points in Transit:',num_in_transit)
+
+    # Model
+    RH = RMHirano(lam=lam,vsini=vsini,P=P,T0=T0,aRs=aRs,i=inc,RpRs=rprs,e=e,w=omega,u=u,
+                        beta=beta,sigma=sigma,supersample_factor=7,exp_time=exptime,limb_dark='quadratic')
+    rm_hirano = RH.evaluate(x)
+    print('Amplitude: {}m/s'.format(np.max(rm_hirano)))
+
+    # Observed
+    x_obs = np.arange(-sim_dur/(2*24),sim_dur/(2*24),exptime)
+    errors = np.ones(len(x_obs))*error
+    rm_obs_hirano = RH.evaluate(x_obs,base_error=error)
+    rm_obs_hirano_noerror = RH.evaluate(x_obs,base_error=0.)
+    res = rm_obs_hirano - rm_obs_hirano_noerror
+
+    ###############################
+    # Figure
+    if ax is None:
+        fig, ax = plt.subplots(dpi=200)
+    ax.plot(x*24.,rm_hirano,color='crimson')
+    ax.errorbar(x_obs*24.,rm_obs_hirano,yerr=error,color="black",marker='o',lw=0,elinewidth=1,
+                capsize=4,mew=0.5,
+                label='{}s exposures, {} transits (rvprec={:0.1f}m/s)'.format(exptime*86400.,ntransits,error),
+                alpha=0.2)
+
+    # Binning w error
+    df_bin_err = utils.bin_data_with_errors(x_obs,rm_obs_hirano,errors,NBIN)
+    ax.errorbar(df_bin_err.x*24.,df_bin_err.y,df_bin_err.yerr,color=utils.CP[0],marker='o',lw=0,markersize=8,
+                label='Bin {}x'.format(NBIN),elinewidth=1,capsize=4,mew=1)
+
+    ax.legend(loc="upper right",fontsize=8)
+    utils.ax_apply_settings(ax)
+    ax.set_xlabel('Time [hours]',fontsize=12)
+    ax.set_ylabel('RV [m/s]',fontsize=12)
+    #ax.set_ylim(-25,35)
+    
+    #########################
+    # SNR
+    snr = utils.rm_SNR(0,impact_parameter,num_in_transit,np.max(rm_hirano),error)
+    print("SNR: {}".format(snr))
+    err_lam = utils.rm_sigma_lambda(0.,impact_parameter,num_in_transit,np.max(rm_hirano),error)
+    print("lambda error: {}".format(err_lam))
+    ax.set_title('{} b RM effect\nassuming vsini = {}km/s\nExpected SNR={:0.2f}'.format(targetname,vsini,snr),fontsize=12)
+
+    savename = '{}_vsini_{}_ntransits_{}.png'.format(targetname,vsini,ntransits)
+    print('###########')
+    print(savename)
+    print('###########')
+    SN = np.sqrt(stats_help.chi2(rm_obs_hirano,error*np.ones(len(rm_obs_hirano)),2)-stats_help.chi2(res,error*np.ones(len(rm_obs_hirano)),2))
+    TITLE = '{} {} RM effect\nAssuming vsini = {}km/s\nSimulated SNR={:0.2f}, Expected SNR={:0.2f}'.format(targetname,instrumentname,vsini,SN,snr)
+    TITLE += '\nExpected $\Delta \lambda = {:0.2f}$deg'.format(err_lam)
+    ax.set_title(TITLE,fontsize=12)
+    print(SN,snr)
+    fig.tight_layout()
+    if savefig:
+        fig.savefig(savename,dpi=200)
+    return x_obs, rm_obs_hirano, errors
+
+
+def get_lc_batman(times,t0,P,i,rprs,aRs,e,omega,u,supersample_factor=1,exp_time=0.,limbdark="quadratic"):
+    """
+    Calls BATMAN and returns the transit model
+
+    INPUT:
+        times - times to evaluate lc
+        t0 - transit midpoint
+        P - period in days
+        i - inclination 
+        rprs - Rp/R*
+        aRs - a/R*
+        e - eccentricity 
+        omega - argument of periastron
+        u - limb darkening [u1,u2]
+        supersample_factor=1
+        exp_time=0. - exposure time
+        limbdark="quadratic"
+
+    OUTPUT:
+        lc - the lightcurve model at *times*
+    """
+    supersample_factor = int(supersample_factor)
+    params = batman.TransitParams()
+    params.t0 = t0
+    params.per = P
+    params.inc = i
+    params.rp = rprs
+    params.a = aRs
+    params.ecc = e
+    params.w = omega
+    params.u = u
+    params.limb_dark = limbdark
+    params.fp = 0.001     
+    transitmodel = batman.TransitModel(params, times, transittype='primary',
+                                       supersample_factor=supersample_factor,
+                                       exp_time=exp_time)
+    lc = transitmodel.light_curve(params)
+    return lc 
+
+

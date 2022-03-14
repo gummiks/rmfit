@@ -10,6 +10,17 @@ import radvel
 import math
 norm_mean     = lambda x: x/np.nanmean(x)
 
+CP = [(0.2980392156862745, 0.4470588235294118, 0.6901960784313725),
+ (0.8666666666666667, 0.5176470588235295, 0.3215686274509804),
+ (0.3333333333333333, 0.6588235294117647, 0.40784313725490196),
+ (0.7686274509803922, 0.3058823529411765, 0.3215686274509804),
+ (0.5058823529411764, 0.4470588235294118, 0.7019607843137254),
+ (0.5764705882352941, 0.47058823529411764, 0.3764705882352941),
+ (0.8549019607843137, 0.5450980392156862, 0.7647058823529411),
+ (0.5490196078431373, 0.5490196078431373, 0.5490196078431373),
+ (0.8, 0.7254901960784313, 0.4549019607843137),
+ (0.39215686274509803, 0.7098039215686275, 0.803921568627451)]
+
 def pickle_dump(filename,obj):
     savefile = open(filename,"w")
     pickle.dump(obj, savefile)
@@ -502,3 +513,126 @@ def round_sig(x, sig=2,return_round_to=False):
     else:
         return num, round_to
         #return round(x,round_to), round_to
+
+
+def bin_data_with_errors(x,y,yerr,nbin):
+    """
+    Bin data with errorbars
+
+    INPUT:
+        x -
+        y -
+        yerr - 
+        nbin -
+
+    OUTPUT:
+        df_bin
+    
+    EXAMPLE:
+        bin_data_with_errors(df_bin.x.values,df_bin.y.values,df_bin.yerr.values,2)
+    """
+    xx = []
+    yy = []
+    yyerr = []
+    nbin = int(nbin)
+    #print(len(x)/nbin)
+    for i in range(int(len(x)/nbin)):
+        #print(x[i*nbin:(i+1)*nbin])
+        xx.append(np.mean(x[i*nbin:(i+1)*nbin]))
+        _y, _yerr = weighted_rv_average(y[i*nbin:(i+1)*nbin],yerr[i*nbin:(i+1)*nbin])
+        yy.append(_y)
+        yyerr.append(_yerr)
+    #print(x[(i+1)*nbin:])
+    if len(x[(i+1)*nbin:])>0:
+        xx.append(np.mean(x[(i+1)*nbin:]))
+        _y, _yerr = weighted_rv_average(y[(i+1)*nbin:],yerr[(i+1)*nbin:])
+        yy.append(_y)
+        yyerr.append(_yerr)
+    df_bin = pd.DataFrame(zip(xx,yy,yyerr),columns=['x','y','yerr'])
+    return df_bin
+
+def weighted_rv_average(x,e):
+    """
+    Calculate weigted average
+
+    INPUT:
+        x
+        e
+
+    OUTPUT:
+        xx: weighted average of x
+        ee: associated error
+    """
+    xx, ww = np.average(x,weights=e**(-2.),returned=True)
+    return xx, np.sqrt(1./ww)
+
+def rm_SNR(lam,b,N,K_R,sigma):
+    """
+    Calculate expected SNR of RM effect
+    
+    INPUT:
+        lam   - lambda in degrees
+        b     - impact factor
+        N     - Number of points 
+        K_R   - RM semiamplitude
+        sigma - error per point in m/s
+        
+    OUTPUT:
+        SNR of RM effect observation
+    
+    NOTES:
+        See EQ 26 from Gaudi and Winn 2007
+        
+    EXAMPLE:
+        rm_SNR(0.,0.17,7.,22.,15.)
+    """
+    QR = rm_QR(N,K_R,sigma)
+    snr = QR*np.sqrt( (1.-4.*(b**2))*(np.cos(np.deg2rad(lam))**2.)/3. +b**2.)
+    #snr = QR*np.sqrt((1.-b**2.)/3.)
+    return snr
+
+def rm_QR(N,K_R,sigma):
+    """
+    QR factor useful for errors in measuring RM effects
+    
+    INPUT:
+        N     - Number of points 
+        K_R   - RM semiamplitude
+        sigma - error per point in m/s
+        
+    OUTPUT:
+        QR factor, unitless
+    
+    NOTES:
+        See EQ 18 from Gaudi and Winn 2007
+    """
+    return np.sqrt(N)*K_R/sigma
+
+def rm_sigma_lambda(lam,b,N,K_R,sigma):
+    """
+    Calculate expected error on lambda for an RM effect observation
+    
+    INPUT:
+        lam   - lambda in degrees
+        b     - impact factor
+        N     - Number of points 
+        K_R   - RM semiamplitude
+        sigma - error per point in m/s
+        
+    OUTPUT:
+        Error on lambda in degrees for an RM effect observation
+    
+    NOTES:
+        See EQ 16 from Gaudi and Winn 2007
+        
+    EXAMPLE:
+        rm_sigma_lambda(0.,0.17,9.,22.,16.)
+    """
+    QR = rm_QR(N,K_R,sigma)
+    lam = np.deg2rad(lam)
+    nominator = (1.-b**2.)*(np.sin(lam)**2.)+(3.*b**2.)*(np.cos(lam)**2.)
+    denominator = b*b*(1.-b*b)
+    sigma_lam = np.sqrt(nominator/denominator)/QR
+    return np.rad2deg(sigma_lam)
+
+
