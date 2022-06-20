@@ -630,6 +630,229 @@ class LPFunction2(object):
         log_ln = log_of_priors + log_of_model1 + log_of_model2 
         return log_ln
 
+class LPFunctionWithIStar(object):
+    """
+    Log-Likelihood function class
+
+    NOTES:
+        Based on hpprvi's class, see: https://github.com/hpparvi/exo_tutorials
+    """
+    def __init__(self,x,y,yerr,file_priors):
+        """
+        INPUT:
+            x - time values in BJD
+            y - y values in m/s
+            yerr - yerr values in m/s
+            file_priors - prior file name
+        """
+        self.data= {"x"   : x,
+                    "y"   : y,
+                    "error"  : yerr}
+        # Setting priors
+        self.ps_all = priorset_from_file(file_priors) # all priors
+        self.ps_fixed = PriorSet(np.array(self.ps_all.priors)[np.array(self.ps_all.fixed)]) # fixed priorset
+        self.ps_vary  = PriorSet(np.array(self.ps_all.priors)[~np.array(self.ps_all.fixed)]) # varying priorset
+        self.ps_fixed_dict = {key: val for key, val in zip(self.ps_fixed.labels,self.ps_fixed.args1)}
+        print('Reading in priorfile from {}'.format(file_priors))
+        print(self.ps_all.df)
+
+    def get_jump_parameter_index(self,lab):
+        """
+        Get the index of a given label
+        """
+        return np.where(np.array(self.ps_vary.labels)==lab)[0][0]
+
+    def get_jump_parameter_value(self,pv,lab):
+        """
+        Get the current value in the argument list 'pv' that has label 'lab'
+        """
+        # First check if we are actually varying it
+        if lab in self.ps_vary.labels:
+            return pv[self.get_jump_parameter_index(lab)]
+        else:
+            # We are not varying it
+            return self.ps_fixed_dict[lab]
+
+    def compute_rm_model(self,pv,times=None):
+        """
+        Calls RM model and returns the transit model
+
+        INPUT:
+            pv    - parameters passed to the function
+            times - times, and array of timestamps
+
+        OUTPUT:
+            lc - the lightcurve model at *times*
+        """
+        T0     =self.get_jump_parameter_value(pv,'t0_p1')
+        P      =self.get_jump_parameter_value(pv,'P_p1')
+        lam    =self.get_jump_parameter_value(pv,'lam_p1')
+        cosi    = self.get_jump_parameter_value(pv,'cosi')
+        R       = self.get_jump_parameter_value(pv,'rstar')
+        Prot    = self.get_jump_parameter_value(pv,'Prot')
+        veq = (2.*np.pi*R*aconst.R_sun.value)/(Prot*86400.*1000.) # km/s
+        vsini   = veq*np.sqrt(1.-cosi**2.)
+        #vsini  =self.get_jump_parameter_value(pv,'vsini')
+        ii     =self.get_jump_parameter_value(pv,'inc_p1')
+        rprs   =self.get_jump_parameter_value(pv,'p_p1')
+        aRs    =self.get_jump_parameter_value(pv,'a_p1')
+        u1     =self.get_jump_parameter_value(pv,'u1')
+        u2     =self.get_jump_parameter_value(pv,'u2')
+        gamma  =self.get_jump_parameter_value(pv,'gamma')
+        beta   =self.get_jump_parameter_value(pv,'vbeta')
+        #sigma  =self.get_jump_parameter_value(pv,'sigma')
+        sigma  = vsini /1.31 # assume sigma is vsini/1.31 (see Hirano et al. 2010, 2011)
+        e      =self.get_jump_parameter_value(pv,'ecc_p1')
+        omega  =self.get_jump_parameter_value(pv,'omega_p1')
+        exptime=self.get_jump_parameter_value(pv,'exptime')/86400. # exptime in days
+        if times is None:
+            times = self.data["x"]
+        self.RH = RMHirano(lam,vsini,P,T0,aRs,ii,rprs,e,omega,[u1,u2],beta,
+                            sigma,supersample_factor=7,exp_time=exptime,limb_dark='quadratic')
+        self.rm = self.RH.evaluate(times)
+        return self.rm
+
+    def compute_cb_model(self,pv,times=None):
+        """
+        Compute convective blueshift model
+
+        NOTES:
+            See Shporer & Brown 2011
+        """
+        ################
+        # adding v_cb
+        if times is None:
+            times = self.data["x"]
+        vcb    =self.get_jump_parameter_value(pv,'vcb')
+        if vcb!=0:
+            T0     =self.get_jump_parameter_value(pv,'t0_p1')
+            P      =self.get_jump_parameter_value(pv,'P_p1')
+            ii     =self.get_jump_parameter_value(pv,'inc_p1')
+            rprs   =self.get_jump_parameter_value(pv,'p_p1')
+            aRs    =self.get_jump_parameter_value(pv,'a_p1')
+            u1     =self.get_jump_parameter_value(pv,'u1')
+            u2     =self.get_jump_parameter_value(pv,'u2')
+            e      =self.get_jump_parameter_value(pv,'ecc_p1')
+            omega  =self.get_jump_parameter_value(pv,'omega_p1')
+
+            # Calculate separation of centers
+            x_1, y_1, z_1 = planet_XYZ_position(times,T0,P,aRs,ii,e,omega)
+            ds = np.sqrt(x_1**2.+y_1**2.)
+
+            self.vels_cb = convective_blueshift.cb_limbdark(ds,rprs,u1,u2,vcb,epsabs=1.49e-1,epsrel=1.49e-1)
+            return self.vels_cb
+        else:
+            return np.zeros(len(times))
+        ################
+        
+    def compute_rv_model(self,pv,times=None):
+        """
+        Compute the RV model
+
+        INPUT:
+            pv    - a list of parameters (only parameters that are being varied)
+            times - times (optional), array of timestamps
+
+        OUTPUT:
+            rv - the rv model evaluated at 'times' if supplied, otherwise
+                      defaults to original data timestamps
+        """
+        if times is None:
+            times = self.data["x"]
+        T0      = self.get_jump_parameter_value(pv,'t0_p1')
+        P       = self.get_jump_parameter_value(pv,'P_p1')
+        gamma   = self.get_jump_parameter_value(pv,'gamma')
+        K       = self.get_jump_parameter_value(pv,'K_p1')
+        e       = self.get_jump_parameter_value(pv,'ecc_p1')
+        w       = self.get_jump_parameter_value(pv,'omega_p1')
+        self.rv = get_rv_curve(times,P=P,tc=T0,e=e,omega=w,K=K)+gamma
+        return self.rv
+
+    def compute_polynomial_model(self,pv,times=None):
+        """
+        Compute the polynomial model.  Note that if gammadot and gammadotdot
+        are not specified in the priors file, they both default to zero.
+
+        INPUT:
+            pv    - a list of parameters (only parameters that are being varied)
+            times - times (optional), array of timestamps
+
+        OUTPUT:
+            poly - the polynomial model evaluated at 'times' if supplied,
+                   otherwise defaults to original data timestamps
+        """
+        if times is None:
+            times = self.data["x"]
+
+        T0 = self.get_jump_parameter_value(pv,'t0_p1')
+        try:
+            gammadot = self.get_jump_parameter_value(pv,'gammadot')
+        except KeyError as e:
+            gammadot = 0
+        try:
+            gammadotdot = self.get_jump_parameter_value(pv,'gammadotdot')
+        except KeyError as e:
+            gammadotdot = 0
+
+        self.poly = (
+            gammadot * (times - T0) +
+            gammadotdot * (times - T0)**2
+        )
+        return self.poly
+
+    def compute_total_model(self,pv,times=None):
+        """
+        Computes the full RM model (including RM and RV and CB)
+
+        INPUT:
+            pv    - a list of parameters (only parameters that are being varied)
+            times - times (optional), array of timestamps
+
+        OUTPUT:
+            rm - the rm model evaluated at 'times' if supplied, otherwise
+                      defaults to original data timestamps
+
+        NOTES:
+            see compute_rm_model(), compute_rv_model(),
+            compute_polynomial_model()
+        """
+        return (
+            self.compute_rm_model(pv,times=times) +
+            self.compute_rv_model(pv,times=times) +
+            self.compute_polynomial_model(pv,times=times) +
+            self.compute_cb_model(pv,times=times)
+        )
+
+    def __call__(self,pv):
+        """
+        Return the log likelihood
+
+        INPUT:
+            pv - the input list of varying parameters
+        """
+        if any(pv < self.ps_vary.pmins) or any(pv>self.ps_vary.pmaxs):
+            return -np.inf
+
+        ii =self.get_jump_parameter_value(pv,'inc_p1')
+        if ii > 90:
+            return -np.inf
+
+        ###############
+        # Prepare data and model and error for ingestion into likelihood
+        y_data = self.data['y']
+        y_model = self.compute_total_model(pv)
+        # jitter in quadrature
+        jitter = self.get_jump_parameter_value(pv,'sigma_rv')
+        error = np.sqrt(self.data['error']**2.+jitter**2.)
+        ###############
+
+        # Return the log-likelihood
+        log_of_priors = self.ps_vary.c_log_prior(pv)
+        # Calculate log likelihood
+        log_of_model  = ll_normal_ev_py(y_data, y_model, error)
+        log_ln = log_of_priors + log_of_model
+        return log_ln
+
 class LPFunction(object):
     """
     Log-Likelihood function class
@@ -826,6 +1049,10 @@ class LPFunction(object):
             pv - the input list of varying parameters
         """
         if any(pv < self.ps_vary.pmins) or any(pv>self.ps_vary.pmaxs):
+            return -np.inf
+
+        ii =self.get_jump_parameter_value(pv,'inc_p1')
+        if ii > 90:
             return -np.inf
 
         ###############
