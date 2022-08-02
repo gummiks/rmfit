@@ -784,7 +784,8 @@ class LPFunctionWithIStar(object):
         if times is None:
             times = self.data["x"]
 
-        T0 = self.get_jump_parameter_value(pv,'t0_p1')
+        #T0 = self.get_jump_parameter_value(pv,'t0_p1')
+        T0 = (self.data['x'][0] + self.data['x'][-1])/2.
         try:
             gammadot = self.get_jump_parameter_value(pv,'gammadot')
         except KeyError as e:
@@ -1002,7 +1003,9 @@ class LPFunction(object):
         if times is None:
             times = self.data["x"]
 
-        T0 = self.get_jump_parameter_value(pv,'t0_p1')
+        #T0 = self.get_jump_parameter_value(pv,'t0_p1')
+        # Use Mean of data instead
+        T0 = (self.data['x'][0] + self.data['x'][-1])/2.
         try:
             gammadot = self.get_jump_parameter_value(pv,'gammadot')
         except KeyError as e:
