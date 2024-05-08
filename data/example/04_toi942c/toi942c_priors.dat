@@ -2,7 +2,7 @@ t0_p1                 Normal            0.,0.01
 P_p1                  Normal            10.156430,0.000079
 lam_p1                Uniform           -180.,180.
 vsini                 Uniform           0.0,30.
-inc_p1                Uniform           88.,90.
+inc_p1                Normal            89.2,0.1
 p_p1                  Normal            0.05202,0.0013
 a_p1                  Normal            17.88,0.3
 u1                    Normal            0.4,0.05
@@ -13,5 +13,5 @@ vbeta                 Normal            10.0,1.0
 K_p1                  FIXED             0.
 gamma                 Uniform           -400.,400.
 sigma_rv              FIXED             0.
-exptime               FIXED             300.
+exptime               FIXED             600.
 vcb                   FIXED             0.
