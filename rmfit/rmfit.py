@@ -906,10 +906,10 @@ class LPFunction2(object):
             file_priors - prior file name
         """
         self.data1= {"time"   : inp['time1'],  
-                     "y"   : inp['rv1'],   
+                     "y"      : inp['rv1'],   
                      "error"  : inp['e_rv1']}
         self.data2= {"time"   : inp['time2'],  
-                     "y"   : inp['rv2'],   
+                     "y"      : inp['rv2'],   
                      "error"  : inp['e_rv2']}
         # Setting priors
         self.ps_all = priorset_from_file(file_priors) # all priors
@@ -2399,7 +2399,11 @@ def aflare1(t, tpeak, fwhm, ampl, upsample=False, uptime=10):
     Reference Davenport et al. (2014) http://arxiv.org/abs/1411.3723
     Use this function for fitting classical flares with most curve_fit
     tools.
+
     Note: this model assumes the flux before the flare is zero centered
+
+    Function from Allesfitter: https://github.com/MNGuenther/allesfitter
+
     Parameters
     ----------
     t : 1-d array
@@ -2462,3 +2466,22 @@ def aflare1(t, tpeak, fwhm, ampl, upsample=False, uptime=10):
                                 ) * np.abs(ampl) # amplitude
 
     return flare
+
+def psi_from_lambda_iS_i(lam,iS,i):
+    """
+    Calculate the true obliquity from lambda, is and i
+    
+    EXAMPLE:
+        N = 10000
+        iS = np.random.normal(39,10.,size=N)
+        i = np.random.normal(86.858,0.05,size=N)
+        lam = np.random.normal(72,30.,size=N)
+        psi = psi_from_lambda_iS_i(lam,iS,i)
+        corner(zip(iS,i,lam,psi),labels=["$i_*$","$i$","$\lambda$","$\psi$"],show_titles=True,quantiles=[0.16,0.5,0.84]);
+    """
+    lam = np.deg2rad(lam)
+    iS = np.deg2rad(iS)
+    i = np.deg2rad(i)
+    cospsi = np.sin(iS)*np.cos(lam)*np.sin(i)+np.cos(iS)*np.cos(i)
+    psi = np.rad2deg(np.arccos(cospsi))
+    return psi
