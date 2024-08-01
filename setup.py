@@ -5,14 +5,15 @@ def readme():
         return f.read()
 
 setup(name='rmfit',
-      version='1.0',
+      version='1.0.1',
       description='Fit Rossiter McLaughlin Data',
       long_description=readme(),
       url='https://github.com/gummiks/rmfit/',
       author='Gudmundur Stefansson',
       author_email='gummiks@gmail.com',
-      install_requires=['emcee','batman-package','radvel','pyde','corner','pandas'],
-      packages=['rmfit'],
+      install_requires=['emcee','batman-package','radvel','pyde','corner','pandas','h5py'],
+      #packages=['rmfit'],
+      packages=find_packages(),
       license='GPLv3',
       classifiers=['Topic :: Scientific/Engineering :: Astronomy'],
       keywords='Astronomy',

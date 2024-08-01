@@ -4,7 +4,14 @@ Fitting Rossiter McLaughlin Data.
 
 # Installation
 
-Should be able to do the following:
+
+## From pip
+
+```
+pip install rmfit
+```
+
+## From source
 
 ```
 git clone git@github.com:gummiks/rmfit.git
@@ -19,6 +26,16 @@ python setup.py install
 - emcee (pip install emcee)
 - radvel (pip install radvel)
 - corner (pip install corner)
+
+## Note on PyDE
+If issues with PyDE, it is best to clone it and install directly from GitHub.
+
+```
+git clone https://github.com/hpparvi/PyDE.git
+cd PyDE
+python setup.py install
+```
+
 
 # Quick start
 See example notebooks in the notebook folder, which gives examples on fitting as-observed data from the literature (see data/examples folder)
