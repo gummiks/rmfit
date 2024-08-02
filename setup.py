@@ -5,13 +5,13 @@ def readme():
         return f.read()
 
 setup(name='rmfit',
-      version='1.0.1',
+      version='1.0.2',
       description='Fit Rossiter McLaughlin Data',
       long_description=readme(),
       url='https://github.com/gummiks/rmfit/',
       author='Gudmundur Stefansson',
       author_email='gummiks@gmail.com',
-      install_requires=['emcee','batman-package','radvel','corner','pandas','h5py'],
+      install_requires=['emcee','batman-package','radvel','corner','pandas','h5py','pytransit'],
       #packages=['rmfit'],
       packages=find_packages(),
       license='GPLv3',
