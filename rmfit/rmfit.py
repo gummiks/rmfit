@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
-import pyde
-import pyde.de
+#import pyde
+#import pyde.de
+from pytransit.utils import de
 import matplotlib.pyplot as plt
 import emcee
 import batman
@@ -1783,7 +1784,7 @@ class RMFit(object):
         """
         centers = np.array(self.lpf.ps_vary.centers)
         print("Running PyDE Optimizer")
-        self.de = pyde.de.DiffEvol(self.lpf, self.lpf.ps_vary.bounds, npop, maximize=maximize) # we want to maximize the likelihood
+        self.de = de.DiffEvol(self.lpf, self.lpf.ps_vary.bounds, npop, maximize=maximize) # we want to maximize the likelihood
         self.min_pv, self.min_pv_lnval = self.de.optimize(ngen=de_iter)
         print("Optimized using PyDE")
         print("Final parameters:")
